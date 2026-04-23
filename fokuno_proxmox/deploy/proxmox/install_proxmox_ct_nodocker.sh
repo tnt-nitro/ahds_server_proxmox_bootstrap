@@ -251,10 +251,10 @@ tar -C "${WORK_DIR}" -czf "${WORK_DIR}/ahds-bootstrap.tar.gz" ahds-bootstrap
 pct push "${CTID}" "${WORK_DIR}/ahds-bootstrap.tar.gz" /root/ahds-bootstrap.tar.gz
 
 echo "[5/10] Payload entpacken..."
-pct exec "${CTID}" -- bash -lc "rm -rf /root/ahds-bootstrap && tar -xzf /root/ahds-bootstrap.tar.gz -C /root"
+pct exec "${CTID}" -- bash -lc "rm -rf /opt/ahds-bootstrap && install -d -m 755 /opt/ahds-bootstrap && tar -xzf /root/ahds-bootstrap.tar.gz -C /opt && chmod -R a+rX /opt/ahds-bootstrap"
 
 echo "[6/10] Native Installation im CT starten..."
-pct exec "${CTID}" -- bash -lc "cd /root/ahds-bootstrap/fokuno_proxmox/deploy/proxmox && set -a && . /root/ahds-bootstrap/installer.env && set +a && ./install_native_nodocker.sh --non-interactive"
+pct exec "${CTID}" -- bash -lc "cd /opt/ahds-bootstrap/fokuno_proxmox/deploy/proxmox && set -a && . /opt/ahds-bootstrap/installer.env && set +a && ./install_native_nodocker.sh --non-interactive"
 
 echo "[7/10] CT-IP ermitteln..."
 CT_IP="$(pct exec "${CTID}" -- bash -lc "hostname -I | awk '{print \$1}'" | tr -d '\r')"

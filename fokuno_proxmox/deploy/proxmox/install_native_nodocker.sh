@@ -226,15 +226,10 @@ END
 \$\$;
 SQL
 
-as_user postgres psql -v ON_ERROR_STOP=1 <<SQL
-DO \$\$
-BEGIN
-   IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '${POSTGRES_DB}') THEN
-      CREATE DATABASE ${POSTGRES_DB} OWNER ${POSTGRES_USER};
-   END IF;
-END
-\$\$;
-SQL
+DB_EXISTS="$(as_user postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${POSTGRES_DB}'" | tr -d '[:space:]')"
+if [[ "${DB_EXISTS}" != "1" ]]; then
+  as_user postgres createdb -O "${POSTGRES_USER}" "${POSTGRES_DB}"
+fi
 
 echo "[5/9] Env-Datei für Service..."
 cat > "${ENV_FILE}" <<EOF
