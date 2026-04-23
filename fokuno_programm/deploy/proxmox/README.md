@@ -32,6 +32,14 @@ Wichtig:
 
 - Für TLS muss die Domain auf die CT-IP zeigen (oder Portforwarding auf CT-IP).
 
+### Öffentlicher Bootstrap-One-Liner
+
+```bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/ahds-proxmox-bootstrap/main/install-ahds-ct.sh)"
+```
+
+Damit wird das private Repo unter `/opt/ahds` aktualisiert/geklont und anschließend der CT-Installer gestartet.
+
 ## Schnellstart ohne Docker (empfohlen für deinen Fall)
 
 Wenn du **kein Docker** auf dem Proxmox-Host willst, nutze den nativen Installer:
