@@ -12,4 +12,4 @@ if [[ ! -f "${TARGET_SCRIPT}" ]]; then
   exit 1
 fi
 
-exec "${TARGET_SCRIPT}" "$@"
+exec bash "${TARGET_SCRIPT}" "$@"
