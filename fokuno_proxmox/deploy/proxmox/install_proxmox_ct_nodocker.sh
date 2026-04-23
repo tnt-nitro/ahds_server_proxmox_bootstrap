@@ -46,20 +46,23 @@ prompt_required() {
   local hinweis="$3"
   local secret="${4:-0}"
   local value=""
-  echo
-  echo "${label}"
-  echo "  ${hinweis}"
-  if [[ "${secret}" == "1" ]]; then
-    read -r -s -p "> " value
+  while true; do
     echo
-  else
-    read -r -p "> " value
-  fi
-  if [[ -z "${value}" ]]; then
-    echo "Eingabe fehlt (${key})." >&2
-    exit 1
-  fi
-  printf -v "${key}" "%s" "${value}"
+    echo "${label}"
+    echo "  ${hinweis}"
+    if [[ "${secret}" == "1" ]]; then
+      read -r -s -p "> " value
+      echo
+    else
+      read -r -p "> " value
+    fi
+    if [[ -z "${value}" ]]; then
+      echo "Eingabe fehlt (${key}). Bitte erneut eingeben." >&2
+      continue
+    fi
+    printf -v "${key}" "%s" "${value}"
+    return 0
+  done
 }
 
 prompt_secret_confirm() {
