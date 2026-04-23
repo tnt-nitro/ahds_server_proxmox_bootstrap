@@ -5,5 +5,5 @@ Wants=docker.service ahds-staging.service
 
 [Service]
 Type=oneshot
-WorkingDirectory=/opt/ahds/fokuno_programm/deploy/proxmox
+WorkingDirectory=/opt/ahds/fokuno_proxmox/deploy/proxmox
 ExecStart=/bin/sh ./backup_db.sh

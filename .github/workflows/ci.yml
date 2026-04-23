@@ -33,7 +33,7 @@ jobs:
         run: python main.py
 
       - name: Staging stack (Docker build, up, HTTP smoke, down)
-        working-directory: fokuno_programm/deploy
+        working-directory: fokuno_proxmox/deploy
         run: |
           set -eux
           api_curl() { curl -H 'x-client-api-major: v1' "$@"; }

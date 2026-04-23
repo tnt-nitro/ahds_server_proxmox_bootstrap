@@ -19,7 +19,7 @@ done
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 SOURCE_INSTALLER="${SCRIPT_DIR}/install_native_nodocker.sh"
-SOURCE_STAGING_API="${REPO_ROOT}/fokuno_programm/deploy/staging_api"
+SOURCE_STAGING_API="${REPO_ROOT}/fokuno_proxmox/deploy/staging_api"
 
 if [[ ! -f "${SOURCE_INSTALLER}" ]]; then
   echo "Installer nicht gefunden: ${SOURCE_INSTALLER}" >&2
@@ -193,11 +193,11 @@ WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "${WORK_DIR}"' EXIT
 
 PAYLOAD_ROOT="${WORK_DIR}/ahds-bootstrap"
-mkdir -p "${PAYLOAD_ROOT}/fokuno_programm/deploy/proxmox"
-mkdir -p "${PAYLOAD_ROOT}/fokuno_programm/deploy"
-cp "${SOURCE_INSTALLER}" "${PAYLOAD_ROOT}/fokuno_programm/deploy/proxmox/install_native_nodocker.sh"
-cp -r "${SOURCE_STAGING_API}" "${PAYLOAD_ROOT}/fokuno_programm/deploy/staging_api"
-chmod +x "${PAYLOAD_ROOT}/fokuno_programm/deploy/proxmox/install_native_nodocker.sh"
+mkdir -p "${PAYLOAD_ROOT}/fokuno_proxmox/deploy/proxmox"
+mkdir -p "${PAYLOAD_ROOT}/fokuno_proxmox/deploy"
+cp "${SOURCE_INSTALLER}" "${PAYLOAD_ROOT}/fokuno_proxmox/deploy/proxmox/install_native_nodocker.sh"
+cp -r "${SOURCE_STAGING_API}" "${PAYLOAD_ROOT}/fokuno_proxmox/deploy/staging_api"
+chmod +x "${PAYLOAD_ROOT}/fokuno_proxmox/deploy/proxmox/install_native_nodocker.sh"
 
 ENV_FILE="${PAYLOAD_ROOT}/installer.env"
 write_env_line STAGING_DOMAIN "${STAGING_DOMAIN}"
@@ -215,7 +215,7 @@ echo "[5/10] Payload entpacken..."
 pct exec "${CTID}" -- bash -lc "rm -rf /root/ahds-bootstrap && tar -xzf /root/ahds-bootstrap.tar.gz -C /root"
 
 echo "[6/10] Native Installation im CT starten..."
-pct exec "${CTID}" -- bash -lc "cd /root/ahds-bootstrap/fokuno_programm/deploy/proxmox && set -a && . /root/ahds-bootstrap/installer.env && set +a && ./install_native_nodocker.sh --non-interactive"
+pct exec "${CTID}" -- bash -lc "cd /root/ahds-bootstrap/fokuno_proxmox/deploy/proxmox && set -a && . /root/ahds-bootstrap/installer.env && set +a && ./install_native_nodocker.sh --non-interactive"
 
 echo "[7/10] CT-IP ermitteln..."
 CT_IP="$(pct exec "${CTID}" -- bash -lc "hostname -I | awk '{print \$1}'" | tr -d '\r')"

@@ -5,7 +5,7 @@ Diese Liste führt dich einmal sauber durch den ersten Live-Betrieb auf Proxmox.
 ## 0) Vorbereitung am Host
 
 ```bash
-cd /opt/ahds/fokuno_programm/deploy/proxmox
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
 cp .env.example .env
 ```
 
@@ -20,13 +20,13 @@ cp .env.example .env
 Alternative (Automatik via GitHub-Skript, vom PC aus):
 
 ```bash
-ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_programm/deploy/proxmox/install_from_github.sh)\""
+ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_proxmox/deploy/proxmox/install_from_github.sh)\""
 ```
 
 Optional zuerst als Trockenlauf:
 
 ```bash
-ssh root@<PROXMOX_IP> "bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_programm/deploy/proxmox/install_from_github.sh) --dry-run\""
+ssh root@<PROXMOX_IP> "bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_proxmox/deploy/proxmox/install_from_github.sh) --dry-run\""
 ```
 
 ## 1) Preflight

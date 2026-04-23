@@ -7,7 +7,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-WorkingDirectory=/opt/ahds/fokuno_programm/deploy/proxmox
+WorkingDirectory=/opt/ahds/fokuno_proxmox/deploy/proxmox
 ExecStart=/usr/bin/docker compose --env-file .env -f staging-compose.proxmox.yml up -d --build
 ExecStop=/usr/bin/docker compose --env-file .env -f staging-compose.proxmox.yml down
 TimeoutStartSec=0

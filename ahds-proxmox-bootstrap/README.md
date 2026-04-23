@@ -11,7 +11,7 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/ahds-proxmox-b
 ## Was das Script macht
 
 1. Klont oder aktualisiert das private Repo `tnt-nitro/fokuno` nach `/opt/ahds`
-2. Startet `fokuno_programm/deploy/proxmox/install_proxmox_ct_nodocker.sh`
+2. Startet `fokuno_proxmox/install_proxmox_ct_nodocker.sh`
 3. Führt dich durch die CT-Erstellung und native Installation ohne Docker
 
 ## Voraussetzungen

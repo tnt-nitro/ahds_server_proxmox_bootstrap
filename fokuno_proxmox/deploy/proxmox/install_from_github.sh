@@ -5,7 +5,7 @@ set -eu
 # Ziel: ähnlich "Helper-Scripts" nutzbar, aber für dieses Repo.
 #
 # Beispiel (vom PC aus):
-# ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_programm/deploy/proxmox/install_from_github.sh)\""
+# ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_proxmox/deploy/proxmox/install_from_github.sh)\""
 #
 # Konfigurierbare Variablen:
 #   AHDS_REPO_URL      (default: https://github.com/tnt-nitro/fokuno.git)
@@ -23,7 +23,7 @@ AHDS_INSTALL_DIR="${AHDS_INSTALL_DIR:-/opt/ahds}"
 INSTALL_SYSTEMD="${INSTALL_SYSTEMD:-1}"
 DRY_RUN="${DRY_RUN:-0}"
 
-TARGET_DIR="${AHDS_INSTALL_DIR}/fokuno_programm/deploy/proxmox"
+TARGET_DIR="${AHDS_INSTALL_DIR}/fokuno_proxmox/deploy/proxmox"
 REPO_DIR="${AHDS_INSTALL_DIR}"
 
 print_help() {

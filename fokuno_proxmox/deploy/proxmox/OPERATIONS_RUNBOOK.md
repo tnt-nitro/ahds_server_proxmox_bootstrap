@@ -6,14 +6,14 @@ Dieses Runbook beschreibt den täglichen Betrieb der Staging-Umgebung auf Proxmo
 
 - Umgebung: `staging`
 - Stack: `caddy_staging`, `api_staging`, `postgres_staging`
-- Ordner: `fokuno_programm/deploy/proxmox`
+- Ordner: `fokuno_proxmox/deploy/proxmox`
 
 ## 1) Standardbefehle
 
 Im Zielordner:
 
 ```bash
-cd /opt/ahds/fokuno_programm/deploy/proxmox
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
 ```
 
 ### Stack starten / stoppen

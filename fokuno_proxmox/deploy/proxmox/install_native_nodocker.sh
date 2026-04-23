@@ -18,7 +18,7 @@ fi
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
-API_DIR="${REPO_ROOT}/fokuno_programm/deploy/staging_api"
+API_DIR="${REPO_ROOT}/fokuno_proxmox/deploy/staging_api"
 APP_DIR="/opt/ahds-native"
 VENV_DIR="${APP_DIR}/venv"
 ENV_FILE="${APP_DIR}/.env"

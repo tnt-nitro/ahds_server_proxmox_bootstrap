@@ -16,7 +16,7 @@ Für den ersten Live-Start siehe: [`GO_LIVE_PROXMOX.md`](./GO_LIVE_PROXMOX.md)
 Wenn du eine sichtbare, getrennte Instanz mit eigener CT-ID willst:
 
 ```bash
-cd /opt/ahds/fokuno_programm/deploy/proxmox
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
 chmod +x install_proxmox_ct_nodocker.sh
 ./install_proxmox_ct_nodocker.sh
 ```
@@ -45,7 +45,7 @@ Damit wird das private Repo unter `/opt/ahds` aktualisiert/geklont und anschlie�
 Wenn du **kein Docker** auf dem Proxmox-Host willst, nutze den nativen Installer:
 
 ```bash
-cd /opt/ahds/fokuno_programm/deploy/proxmox
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
 chmod +x install_native_nodocker.sh
 ./install_native_nodocker.sh
 ```
@@ -82,7 +82,7 @@ curl -I https://<DEINE_DOMAIN>/v1/meta/version
 1. In diesen Ordner wechseln:
 
 ```bash
-cd fokuno_programm/deploy/proxmox
+cd fokuno_proxmox/deploy/proxmox
 ```
 
 ### Alternative: One-Command-Installation direkt von GitHub
@@ -90,7 +90,7 @@ cd fokuno_programm/deploy/proxmox
 Vom PC aus per SSH auf dem Proxmox-Host starten:
 
 ```bash
-ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_programm/deploy/proxmox/install_from_github.sh)\""
+ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_proxmox/deploy/proxmox/install_from_github.sh)\""
 ```
 
 Das Skript:
@@ -105,10 +105,10 @@ Beispiele:
 
 ```bash
 # Nur prüfen, keine Änderungen
-ssh root@<PROXMOX_IP> "bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_programm/deploy/proxmox/install_from_github.sh) --dry-run\""
+ssh root@<PROXMOX_IP> "bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_proxmox/deploy/proxmox/install_from_github.sh) --dry-run\""
 
 # Installieren ohne systemd-Aktivierung
-ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_programm/deploy/proxmox/install_from_github.sh) --no-systemd\""
+ssh root@<PROXMOX_IP> "STAGING_DOMAIN=staging.example.org TLS_EMAIL=admin@example.org POSTGRES_PASSWORD='<STRONG>' API_TOKEN_SECRET='<VERY_STRONG>' ADMIN_EMAIL='admin@example.org' bash -lc \"\$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/fokuno/main/fokuno_proxmox/deploy/proxmox/install_from_github.sh) --no-systemd\""
 ```
 
 Optional vor dem ersten Start:
@@ -203,7 +203,7 @@ Im Ordner `systemd/` liegen Unit-Dateien für:
 
 1. Pfad prüfen/anpassen  
    Die Unit-Dateien nutzen standardmäßig:
-   `/opt/ahds/fokuno_programm/deploy/proxmox`
+   `/opt/ahds/fokuno_proxmox/deploy/proxmox`
 
 1. Units kopieren:
 
