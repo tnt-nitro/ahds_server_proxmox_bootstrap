@@ -11,6 +11,27 @@ Für den ersten Live-Start siehe: [`GO_LIVE_PROXMOX.md`](./GO_LIVE_PROXMOX.md)
 - Zugriff über feste Domain mit TLS.
 - Backups der Staging-Datenbank sind reproduzierbar.
 
+## Schnellstart mit eigenem Proxmox-CT (neu)
+
+Wenn du eine sichtbare, getrennte Instanz mit eigener CT-ID willst:
+
+```bash
+cd /opt/ahds/fokuno_programm/deploy/proxmox
+chmod +x install_proxmox_ct_nodocker.sh
+./install_proxmox_ct_nodocker.sh
+```
+
+Das Skript:
+
+- erstellt automatisch einen LXC-CT
+- zeigt dir CT-ID/Hostname/IP
+- installiert AhDs nativ im CT (ohne Docker)
+- erlaubt später einfaches Löschen über `pct destroy <CTID> --purge 1`
+
+Wichtig:
+
+- Für TLS muss die Domain auf die CT-IP zeigen (oder Portforwarding auf CT-IP).
+
 ## Schnellstart ohne Docker (empfohlen für deinen Fall)
 
 Wenn du **kein Docker** auf dem Proxmox-Host willst, nutze den nativen Installer:
@@ -28,6 +49,11 @@ Das Skript richtet automatisch ein:
 - NGINX Reverse Proxy
 - TLS mit Certbot
 - optional DuckDNS-Cron (wenn Token eingegeben wird)
+
+Wichtig:
+
+- Dieses Skript installiert **nativ auf dem aktuellen System**.
+- Es erstellt **keinen** Proxmox-CT automatisch.
 
 Danach testen:
 

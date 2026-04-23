@@ -26,41 +26,89 @@ APP_USER="ahds"
 APP_GROUP="ahds"
 SYSTEMD_SERVICE="ahds-staging-api"
 NGINX_SITE="ahds-staging"
+AUTO_MODE=0
 
-prompt() {
+for arg in "$@"; do
+  case "${arg}" in
+    --non-interactive)
+      AUTO_MODE=1
+      ;;
+    *)
+      echo "Unbekannter Parameter: ${arg}" >&2
+      echo "Erlaubt: --non-interactive" >&2
+      exit 1
+      ;;
+  esac
+done
+
+as_user() {
+  local user="$1"
+  shift
+  if command -v runuser >/dev/null 2>&1; then
+    runuser -u "${user}" -- "$@"
+  else
+    su -s /bin/sh -c "$(printf "%q " "$@")" "${user}"
+  fi
+}
+
+domain_valid() {
+  local d="$1"
+  [[ "${d}" =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]
+}
+
+mail_valid() {
+  local m="$1"
+  [[ "${m}" =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]]
+}
+
+prompt_required() {
   local key="$1"
   local label="$2"
-  local secret="${3:-0}"
+  local hinweis="$3"
+  local secret="${4:-0}"
   local value=""
+  echo
+  echo "${label}"
+  echo "  ${hinweis}"
   if [[ "${secret}" == "1" ]]; then
-    read -r -s -p "${label}: " value
+    read -r -s -p "> " value
     echo
   else
-    read -r -p "${label}: " value
+    read -r -p "> " value
   fi
   if [[ -z "${value}" ]]; then
-    echo "Wert darf nicht leer sein: ${key}" >&2
+    echo "Eingabe fehlt (${key}). Bitte Script erneut starten." >&2
     exit 1
   fi
   printf -v "${key}" "%s" "${value}"
 }
 
-echo "AhDs Native Installer (ohne Docker)"
-echo "===================================="
-echo
-prompt STAGING_DOMAIN "Domain (z. B. ahdsserver.duckdns.org)"
-prompt TLS_EMAIL "TLS E-Mail"
-prompt POSTGRES_PASSWORD "Postgres Passwort" 1
-prompt API_TOKEN_SECRET "API Token Secret (lang/stark)" 1
-prompt ADMIN_EMAIL "Admin E-Mail"
-read -r -p "DuckDNS Token (optional, Enter = überspringen): " DUCKDNS_TOKEN
+prompt_optional() {
+  local key="$1"
+  local label="$2"
+  local hinweis="$3"
+  local value=""
+  echo
+  echo "${label}"
+  echo "  ${hinweis}"
+  read -r -p "> " value
+  printf -v "${key}" "%s" "${value}"
+}
 
 POSTGRES_DB="ahds_staging"
 POSTGRES_USER="ahds"
 APP_ENV="staging"
 
+echo "AhDs Native Installer (ohne Docker)"
+echo "===================================="
 echo
-echo "[1/8] Pakete installieren..."
+echo "Ablauf:"
+echo "  1) Systempakete installieren"
+echo "  2) Eingaben abfragen (mit Erklärungen)"
+echo "  3) API + Datenbank + NGINX + TLS einrichten"
+echo
+
+echo "[1/9] Pakete installieren..."
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get install -y \
@@ -69,21 +117,79 @@ apt-get install -y \
   postgresql postgresql-contrib \
   nginx certbot python3-certbot-nginx
 
-echo "[2/8] System-User und App-Verzeichnis..."
+if [[ -t 1 ]]; then
+  clear
+fi
+
+if [[ "${AUTO_MODE}" -eq 1 ]]; then
+  : "${STAGING_DOMAIN:?STAGING_DOMAIN fehlt}"
+  : "${TLS_EMAIL:?TLS_EMAIL fehlt}"
+  : "${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}"
+  : "${API_TOKEN_SECRET:?API_TOKEN_SECRET fehlt}"
+  : "${ADMIN_EMAIL:?ADMIN_EMAIL fehlt}"
+  DUCKDNS_TOKEN="${DUCKDNS_TOKEN:-}"
+else
+  echo "AhDs Konfiguration"
+  echo "=================="
+  echo "Bitte jetzt die benötigten Werte eingeben."
+
+  prompt_required STAGING_DOMAIN \
+    "1/6 Domain für Staging-API" \
+    "Beispiel: ahdsserver.duckdns.org (genau diese Ziel-Domain eingeben)."
+
+  prompt_required TLS_EMAIL \
+    "2/6 TLS E-Mail (Let's Encrypt Kontakt)" \
+    "Beispiel: dein.name@example.org"
+
+  prompt_required POSTGRES_PASSWORD \
+    "3/6 PostgreSQL Passwort" \
+    "Starkes Passwort für DB-Benutzer '${POSTGRES_USER}'." \
+    1
+
+  prompt_required API_TOKEN_SECRET \
+    "4/6 API Token Secret" \
+    "Langer, zufälliger Wert für Signierung der API-Tokens." \
+    1
+
+  prompt_required ADMIN_EMAIL \
+    "5/6 Admin E-Mail für die API" \
+    "Beispiel: admin@example.org"
+
+  prompt_optional DUCKDNS_TOKEN \
+    "6/6 DuckDNS Token (optional)" \
+    "Nur nötig, wenn dieses Script den DuckDNS-Cronjob setzen soll. Sonst leer lassen."
+fi
+
+if ! domain_valid "${STAGING_DOMAIN}"; then
+  echo "Ungültige Domain: ${STAGING_DOMAIN}" >&2
+  exit 1
+fi
+if ! mail_valid "${TLS_EMAIL}"; then
+  echo "Ungültige E-Mail: ${TLS_EMAIL}" >&2
+  exit 1
+fi
+if ! mail_valid "${ADMIN_EMAIL}"; then
+  echo "Ungültige Admin-E-Mail: ${ADMIN_EMAIL}" >&2
+  exit 1
+fi
+
+echo
+echo "[2/9] System-User und App-Verzeichnis..."
 if ! id -u "${APP_USER}" >/dev/null 2>&1; then
   useradd --system --home "${APP_DIR}" --create-home --shell /usr/sbin/nologin "${APP_USER}"
 fi
 mkdir -p "${APP_DIR}"
+rm -rf "${APP_DIR}/staging_api"
 cp -r "${API_DIR}" "${APP_DIR}/staging_api"
 chown -R "${APP_USER}:${APP_GROUP}" "${APP_DIR}"
 
-echo "[3/8] Python venv und Abhängigkeiten..."
-sudo -u "${APP_USER}" python3 -m venv "${VENV_DIR}"
-sudo -u "${APP_USER}" "${VENV_DIR}/bin/pip" install --upgrade pip
-sudo -u "${APP_USER}" "${VENV_DIR}/bin/pip" install -r "${APP_DIR}/staging_api/requirements.txt"
+echo "[3/9] Python venv und Abhängigkeiten..."
+as_user "${APP_USER}" python3 -m venv "${VENV_DIR}"
+as_user "${APP_USER}" "${VENV_DIR}/bin/pip" install --upgrade pip
+as_user "${APP_USER}" "${VENV_DIR}/bin/pip" install -r "${APP_DIR}/staging_api/requirements.txt"
 
-echo "[4/8] Postgres DB/User..."
-sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
+echo "[4/9] Postgres DB/User..."
+as_user postgres psql -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
 BEGIN
    IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${POSTGRES_USER}') THEN
@@ -95,7 +201,7 @@ END
 \$\$;
 SQL
 
-sudo -u postgres psql -v ON_ERROR_STOP=1 <<SQL
+as_user postgres psql -v ON_ERROR_STOP=1 <<SQL
 DO \$\$
 BEGIN
    IF NOT EXISTS (SELECT FROM pg_database WHERE datname = '${POSTGRES_DB}') THEN
@@ -105,7 +211,7 @@ END
 \$\$;
 SQL
 
-echo "[5/8] Env-Datei für Service..."
+echo "[5/9] Env-Datei für Service..."
 cat > "${ENV_FILE}" <<EOF
 APP_ENV=${APP_ENV}
 API_TOKEN_SECRET=${API_TOKEN_SECRET}
@@ -122,7 +228,7 @@ EOF
 chown "${APP_USER}:${APP_GROUP}" "${ENV_FILE}"
 chmod 600 "${ENV_FILE}"
 
-echo "[6/8] systemd Service einrichten..."
+echo "[6/9] systemd Service einrichten..."
 cat > "/etc/systemd/system/${SYSTEMD_SERVICE}.service" <<EOF
 [Unit]
 Description=AhDs Staging API (native)
@@ -147,7 +253,10 @@ EOF
 systemctl daemon-reload
 systemctl enable --now "${SYSTEMD_SERVICE}.service"
 
-echo "[7/8] NGINX Reverse Proxy..."
+echo "[7/9] Lokalen API-Healthcheck prüfen..."
+curl -fsS "http://127.0.0.1:8000/health" >/dev/null
+
+echo "[8/9] NGINX Reverse Proxy..."
 cat > "/etc/nginx/sites-available/${NGINX_SITE}" <<EOF
 server {
     listen 80;
@@ -169,7 +278,7 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 
-echo "[8/8] TLS via Certbot..."
+echo "[9/9] TLS via Certbot..."
 certbot --nginx -d "${STAGING_DOMAIN}" -m "${TLS_EMAIL}" --agree-tos --non-interactive --redirect
 
 if [[ -n "${DUCKDNS_TOKEN:-}" ]]; then
@@ -184,6 +293,8 @@ fi
 
 echo
 echo "Fertig."
+echo "Installiert auf Host: $(hostname)"
+echo "Hinweis: Dieses Script erstellt keinen Proxmox-CT; es installiert nativ auf dem aktuellen System."
 echo "Tests:"
 echo "  curl -I https://${STAGING_DOMAIN}/health"
 echo "  curl -I https://${STAGING_DOMAIN}/ready"
