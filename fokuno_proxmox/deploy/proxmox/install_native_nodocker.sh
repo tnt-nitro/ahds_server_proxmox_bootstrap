@@ -303,11 +303,22 @@ systemctl restart "${SYSTEMD_SERVICE}.service" 2>/dev/null || true
 echo "[7/9] Lokalen API-Healthcheck prüfen..."
 wait_for_api_health "http://127.0.0.1:8000/health" 60
 
-echo "[8/9] NGINX Reverse Proxy..."
+ACME_WEBROOT="/var/www/ahds-acme"
+mkdir -p "${ACME_WEBROOT}/.well-known/acme-challenge"
+chown -R www-data:www-data "${ACME_WEBROOT}" 2>/dev/null || chown -R nginx:nginx "${ACME_WEBROOT}" 2>/dev/null || true
+
+echo "[8/9] NGINX Reverse Proxy (HTTP + ACME-Webroot)..."
 cat > "/etc/nginx/sites-available/${NGINX_SITE}" <<EOF
 server {
     listen 80;
     server_name ${STAGING_DOMAIN};
+
+    # Muss VOR location / stehen: Let's Encrypt HTTP-01
+    location ^~ /.well-known/acme-challenge/ {
+        root ${ACME_WEBROOT};
+        default_type "text/plain";
+        try_files \$uri =404;
+    }
 
     location / {
         proxy_pass http://127.0.0.1:8000;
@@ -325,8 +336,83 @@ rm -f /etc/nginx/sites-enabled/default
 nginx -t
 systemctl reload nginx
 
-echo "[9/9] TLS via Certbot..."
-certbot --nginx -d "${STAGING_DOMAIN}" -m "${TLS_EMAIL}" --agree-tos --non-interactive --redirect
+echo "[9/9] TLS via Certbot (Webroot)..."
+set +e
+certbot certonly \
+  --webroot -w "${ACME_WEBROOT}" \
+  -d "${STAGING_DOMAIN}" \
+  -m "${TLS_EMAIL}" \
+  --agree-tos \
+  --non-interactive \
+  --keep-until-expiring
+CERTBOT_RC=$?
+set -e
+if [[ "${CERTBOT_RC}" -ne 0 ]]; then
+  echo
+  echo "Certbot ist fehlgeschlagen (Exit ${CERTBOT_RC}). Häufige Ursachen:" >&2
+  echo "  - Port 80 von außen muss auf DIESE Maschine zeigen (Router-Portweiterleitung auf diese IP)." >&2
+  echo "  - ${STAGING_DOMAIN} muss per DNS (z. B. DuckDNS) auf die öffentliche IP zeigen, die hier ankommt." >&2
+  echo "  - Kein anderer Dienst darf Port 80 belegen oder eine andere Antwort liefern als dieses NGINX." >&2
+  echo "Prüfen (lokal, mit Host-Header):" >&2
+  echo "  curl -sI -H 'Host: ${STAGING_DOMAIN}' http://127.0.0.1/.well-known/acme-challenge/test || true" >&2
+  echo "Log: /var/log/letsencrypt/letsencrypt.log" >&2
+  exit "${CERTBOT_RC}"
+fi
+
+SSL_FULLCHAIN="/etc/letsencrypt/live/${STAGING_DOMAIN}/fullchain.pem"
+SSL_PRIVKEY="/etc/letsencrypt/live/${STAGING_DOMAIN}/privkey.pem"
+if [[ ! -f "${SSL_FULLCHAIN}" ]] || [[ ! -f "${SSL_PRIVKEY}" ]]; then
+  echo "Fehler: Zertifikatdateien fehlen nach Certbot." >&2
+  exit 1
+fi
+
+echo "NGINX: HTTPS aktivieren..."
+SSL_EXTRA=""
+if [[ -f /etc/letsencrypt/options-ssl-nginx.conf ]]; then
+  SSL_EXTRA="include /etc/letsencrypt/options-ssl-nginx.conf;"
+fi
+if [[ -f /etc/letsencrypt/ssl-dhparams.pem ]]; then
+  SSL_EXTRA="${SSL_EXTRA}
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;"
+fi
+
+cat > "/etc/nginx/sites-available/${NGINX_SITE}" <<EOF
+server {
+    listen 80;
+    server_name ${STAGING_DOMAIN};
+
+    location ^~ /.well-known/acme-challenge/ {
+        root ${ACME_WEBROOT};
+        default_type "text/plain";
+        try_files \$uri =404;
+    }
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl http2;
+    server_name ${STAGING_DOMAIN};
+
+    ssl_certificate ${SSL_FULLCHAIN};
+    ssl_certificate_key ${SSL_PRIVKEY};
+    ${SSL_EXTRA}
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+
+nginx -t
+systemctl reload nginx
 
 if [[ -n "${DUCKDNS_TOKEN:-}" ]]; then
   echo "[DuckDNS] Updater einrichten..."
