@@ -11,6 +11,32 @@ Für den ersten Live-Start siehe: [`GO_LIVE_PROXMOX.md`](./GO_LIVE_PROXMOX.md)
 - Zugriff über feste Domain mit TLS.
 - Backups der Staging-Datenbank sind reproduzierbar.
 
+## Schnellstart ohne Docker (empfohlen für deinen Fall)
+
+Wenn du **kein Docker** auf dem Proxmox-Host willst, nutze den nativen Installer:
+
+```bash
+cd /opt/ahds/fokuno_programm/deploy/proxmox
+chmod +x install_native_nodocker.sh
+./install_native_nodocker.sh
+```
+
+Das Skript richtet automatisch ein:
+
+- PostgreSQL lokal
+- FastAPI als systemd-Service (`ahds-staging-api.service`)
+- NGINX Reverse Proxy
+- TLS mit Certbot
+- optional DuckDNS-Cron (wenn Token eingegeben wird)
+
+Danach testen:
+
+```bash
+curl -I https://<DEINE_DOMAIN>/health
+curl -I https://<DEINE_DOMAIN>/ready
+curl -I https://<DEINE_DOMAIN>/v1/meta/version
+```
+
 ## Voraussetzungen
 
 - Docker + Compose auf der Proxmox-VM/LXC installiert
