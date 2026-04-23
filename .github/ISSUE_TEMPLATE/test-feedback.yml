@@ -1,0 +1,73 @@
+name: "Testfeedback (Staging)"
+description: "Rückmeldung zu einer freigegebenen Testversion"
+title: "[Testfeedback] "
+labels: ["test-feedback"]
+body:
+  - type: input
+    id: release_tag
+    attributes:
+      label: Getestete Version (Release-Tag)
+      description: "Beispiel: v0.9.0-rc1"
+      placeholder: "v0.x.y-rcN"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Umgebung
+      options:
+        - staging
+        - prod
+    validations:
+      required: true
+
+  - type: dropdown
+    id: platform
+    attributes:
+      label: Plattform
+      options:
+        - Windows PC
+        - Android (Samsung)
+        - Browser (Firefox)
+        - Browser (Chrome/Edge)
+        - Raspberry Pi
+        - Sonstiges
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Erwartetes Verhalten
+      description: "Was hätte passieren sollen?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Tatsächliches Verhalten
+      description: "Was ist tatsächlich passiert?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduktionsschritte
+      description: "Schritte von Start bis Problem"
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Zusatzinfos (optional)
+      description: "Screenshots, Log-Auszug, Uhrzeit, API-Endpoint, Header etc."
+    validations:
+      required: false

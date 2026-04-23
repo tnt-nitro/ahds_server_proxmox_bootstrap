@@ -1,0 +1,5 @@
+# AhDs – einzige Versionsquelle für fokuno_programm
+# Bei jeder Änderung von VERSION die Zeile BUMPED_AT aktualisieren (ISO-8601 empfohlen).
+
+VERSION=0.8.21
+BUMPED_AT=2026-04-22T20:51:28+02:00

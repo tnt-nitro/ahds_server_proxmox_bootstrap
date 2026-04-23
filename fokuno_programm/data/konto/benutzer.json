@@ -1,0 +1,11 @@
+{
+  "users": [
+    {
+      "id": "ahds-seed-nico",
+      "name": "Nico",
+      "email": "tnt-nitro@web.de",
+      "salt_hex": "2a3d54f7bce755115d02bc24876b671b",
+      "hash_hex": "9f206d2c3877a4c0f61e319d2d80eb9aa072d6ffc32ea2b91f1bcb3792e61975"
+    }
+  ]
+}

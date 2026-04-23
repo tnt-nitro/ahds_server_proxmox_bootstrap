@@ -1,0 +1,74 @@
+# Proxmox-Staging: Reverse Proxy (Caddy) + API + Postgres.
+# Nutzung:
+#   1) .env.example nach .env kopieren
+#   2) Domain/Secrets setzen
+#   3) docker compose --env-file .env -f staging-compose.proxmox.yml up -d --build
+
+services:
+  postgres_staging:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata_staging:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api_staging:
+    build: ../staging_api
+    restart: unless-stopped
+    environment:
+      APP_ENV: staging
+      API_TOKEN_SECRET: ${API_TOKEN_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      LOGIN_MAX_FEHLVERSUCHE: ${LOGIN_MAX_FEHLVERSUCHE}
+      LOGIN_SPERRE_SEKUNDEN: ${LOGIN_SPERRE_SEKUNDEN}
+      RESET_TOKEN_TTL_SEKUNDEN: ${RESET_TOKEN_TTL_SEKUNDEN}
+      PGHOST: postgres_staging
+      PGPORT: "5432"
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+    depends_on:
+      postgres_staging:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3).read()",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 15
+      start_period: 20s
+
+  caddy_staging:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      STAGING_DOMAIN: ${STAGING_DOMAIN}
+      TLS_EMAIL: ${TLS_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      api_staging:
+        condition: service_healthy
+
+volumes:
+  pgdata_staging:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,86 @@
+# fokuno_programm: Abhaengigkeiten installieren, Syntax pruefen, Smoke-Tests.
+# Repo-Root muss den Ordner fokuno_programm enthalten (wie im AhDs-Workspace unter script/).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+defaults:
+  run:
+    working-directory: fokuno_programm
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencies
+        run: pip install -r requirements.txt
+
+      - name: Bytecode compile
+        run: python -m compileall -q .
+
+      - name: Smoke imports and APP_ENV
+        run: python tools/ci_smoke.py
+
+      - name: CLI entry (no Tk)
+        run: python main.py
+
+      - name: Staging stack (Docker build, up, HTTP smoke, down)
+        working-directory: fokuno_programm/deploy
+        run: |
+          set -eux
+          api_curl() { curl -H 'x-client-api-major: v1' "$@"; }
+          cp staging.env.example .env
+          docker compose -f staging-compose.yml config -q
+          docker compose -f staging-compose.yml build
+          docker compose -f staging-compose.yml up -d --wait
+          curl -fsS http://127.0.0.1:8000/health
+          api_curl -fsS -D version_headers.txt -o version.json http://127.0.0.1:8000/v1/meta/version
+          python -c "import json,re; d=json.load(open('version.json', encoding='utf-8')); h=open('version_headers.txt', encoding='utf-8').read(); assert d.get('api_major')=='v1' and d.get('api_release'), d; assert re.search(r'(?im)^x-api-major:\\s*v1\\s*$', h), h; assert re.search(r'(?im)^x-api-release:\\s*.+\\s*$', h), h"
+          api_curl -fsS http://127.0.0.1:8000/v1/meta/deprecations | python -c "import sys,json; d=json.load(sys.stdin); assert isinstance(d,list) and any(x.get('path')=='/v1/admin/logs' for x in d), d"
+          curl -fsS http://127.0.0.1:8000/ready | python -c "import sys, json; d=json.load(sys.stdin); assert d.get('db')=='ok', d"
+          CODE_NO_MAJOR=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:8000/v1/users/me)
+          test "${CODE_NO_MAJOR}" = "426"
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/auth/register -H 'content-type: application/json' -d '{"name":"CI Tester","email":"ci@example.org","password":"ci-passwort-123"}' > reg.json
+          python -c "import json; d=json.load(open('reg.json', encoding='utf-8')); assert d.get('access_token') and d.get('refresh_token'), d"
+          TOKEN=$(python -c "import json; print(json.load(open('reg.json', encoding='utf-8'))['access_token'])")
+          REFRESH=$(python -c "import json; print(json.load(open('reg.json', encoding='utf-8'))['refresh_token'])")
+          api_curl -fsS -X POST -H "authorization: Bearer ${REFRESH}" http://127.0.0.1:8000/v1/auth/refresh > ref.json
+          python -c "import json; d=json.load(open('ref.json', encoding='utf-8')); assert d.get('access_token') and d.get('refresh_token'), d"
+          TOKEN=$(python -c "import json; print(json.load(open('ref.json', encoding='utf-8'))['access_token'])")
+          api_curl -fsS -H "authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/users/me | python -c "import sys, json; d=json.load(sys.stdin); assert d.get('email')=='ci@example.org' and d.get('role')=='user', d"
+          CODE_ADMIN_USER=$(api_curl -s -o /dev/null -w "%{http_code}" -H "authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/admin/users)
+          test "${CODE_ADMIN_USER}" = "403"
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/auth/register -H 'content-type: application/json' -d '{"name":"Admin Tester","email":"admin@example.org","password":"ci-passwort-123"}' > admin.json
+          python -c "import json; d=json.load(open('admin.json', encoding='utf-8')); assert d.get('user',{}).get('role')=='admin', d"
+          ADMIN_TOKEN=$(python -c "import json; print(json.load(open('admin.json', encoding='utf-8'))['access_token'])")
+          api_curl -fsS -H "authorization: Bearer ${ADMIN_TOKEN}" http://127.0.0.1:8000/v1/admin/users | python -c "import sys, json; d=json.load(sys.stdin); assert isinstance(d,list) and len(d) >= 2 and any(x.get('role')=='admin' for x in d), d"
+          api_curl -fsS -D audit_headers.txt -o audit.json -H "authorization: Bearer ${ADMIN_TOKEN}" "http://127.0.0.1:8000/v1/admin/audit-logs?limit=1&offset=0&event=auth.register&ok=true"
+          python -c "import json,re; d=json.load(open('audit.json', encoding='utf-8')); h=open('audit_headers.txt', encoding='utf-8').read(); m=re.search(r'(?im)^x-total-count:\\s*(\\d+)\\s*$', h); l=re.search(r'(?im)^link:\\s*(.+)$', h); assert isinstance(d,list) and len(d)>=1 and all(x.get('event')=='auth.register' and x.get('ok') is True for x in d), d; assert m and int(m.group(1)) >= len(d), (m.group(1) if m else None, len(d)); assert int(m.group(1)) >= 2 and l and 'rel=\"next\"' in l.group(1), l.group(1) if l else None"
+          api_curl -fsS -D dep_headers.txt -o dep_body.json -H "authorization: Bearer ${ADMIN_TOKEN}" "http://127.0.0.1:8000/v1/admin/logs?limit=1&offset=0"
+          python -c "import json,re; d=json.load(open('dep_body.json', encoding='utf-8')); h=open('dep_headers.txt', encoding='utf-8').read(); assert isinstance(d,list), d; assert re.search(r'(?im)^deprecation:\\s*true\\s*$', h), h; assert re.search(r'(?im)^sunset:\\s*.+\\s*$', h), h; l=re.search(r'(?im)^link:\\s*(.+)$', h); assert l and 'successor-version' in l.group(1) and '/v1/admin/audit-logs' in l.group(1), l.group(1) if l else None"
+          CODE_BAD_LOGIN=$(api_curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8000/v1/auth/login -H 'content-type: application/json' -d '{"email":"ci@example.org","password":"falsch"}')
+          test "${CODE_BAD_LOGIN}" = "401"
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/auth/login -H 'content-type: application/json' -d '{"email":"ci@example.org","password":"ci-passwort-123"}' | python -c "import sys, json; d=json.load(sys.stdin); assert d.get('access_token'), d"
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/auth/password-reset/request -H 'content-type: application/json' -d '{"email":"ci@example.org"}' > reset_req.json
+          python -c "import json; d=json.load(open('reset_req.json', encoding='utf-8')); assert d.get('status')=='ok' and d.get('reset_token_preview'), d"
+          RESET_TOKEN=$(python -c "import json; print(json.load(open('reset_req.json', encoding='utf-8'))['reset_token_preview'])")
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/auth/password-reset/confirm -H 'content-type: application/json' -d "{\"email\":\"ci@example.org\",\"reset_token\":\"${RESET_TOKEN}\",\"new_password\":\"ci-passwort-neu-123\"}" | python -c "import sys, json; d=json.load(sys.stdin); assert d.get('status')=='ok', d"
+          CODE_OLD_PW=$(api_curl -s -o /dev/null -w "%{http_code}" -X POST http://127.0.0.1:8000/v1/auth/login -H 'content-type: application/json' -d '{"email":"ci@example.org","password":"ci-passwort-123"}')
+          test "${CODE_OLD_PW}" = "401"
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/auth/login -H 'content-type: application/json' -d '{"email":"ci@example.org","password":"ci-passwort-neu-123"}' > login_neu.json
+          python -c "import json; d=json.load(open('login_neu.json', encoding='utf-8')); assert d.get('access_token'), d"
+          TOKEN=$(python -c "import json; print(json.load(open('login_neu.json', encoding='utf-8'))['access_token'])")
+          api_curl -fsS -X POST http://127.0.0.1:8000/v1/events -H "authorization: Bearer ${TOKEN}" -H 'content-type: application/json' -d '{"titel":"Smoke Event","starts_at":"2030-01-01T10:00:00+00:00","ends_at":"2030-01-01T11:00:00+00:00","notiz":"ci"}' | python -c "import sys, json; d=json.load(sys.stdin); assert d.get('id',0) > 0, d"
+          api_curl -fsS -H "authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/events | python -c "import sys, json; d=json.load(sys.stdin); assert isinstance(d,list) and len(d) >= 1, d"
+          api_curl -fsS -X POST -H "authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/auth/logout | python -c "import sys, json; d=json.load(sys.stdin); assert d.get('status')=='ok', d"
+          CODE=$(api_curl -s -o /dev/null -w "%{http_code}" -H "authorization: Bearer ${TOKEN}" http://127.0.0.1:8000/v1/users/me)
+          test "${CODE}" = "401"
+          docker compose -f staging-compose.yml down -v
