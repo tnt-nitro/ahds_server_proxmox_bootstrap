@@ -84,6 +84,18 @@ write_env_line() {
   printf "%s=%q\n" "${key}" "${value}" >> "${ENV_FILE}"
 }
 
+detect_template_storage() {
+  local storage=""
+  while IFS= read -r storage; do
+    [[ -z "${storage}" ]] && continue
+    if pveam list "${storage}" >/dev/null 2>&1; then
+      echo "${storage}"
+      return 0
+    fi
+  done < <(pvesm status -content vztmpl 2>/dev/null | awk 'NR>1 {print $1}')
+  echo "local"
+}
+
 if [[ -t 1 ]]; then
   clear
 fi
@@ -108,8 +120,10 @@ if [[ -z "${TEMPLATE_NAME}" ]]; then
   echo "Kein Debian-12 LXC-Template gefunden." >&2
   exit 1
 fi
-prompt_default TEMPLATE_STORAGE "Template Storage" "Wo liegt dein LXC-Template (z. B. local)." "local"
+TEMPLATE_STORAGE="$(detect_template_storage)"
+echo "Template Storage automatisch erkannt: ${TEMPLATE_STORAGE}"
 if ! pveam list "${TEMPLATE_STORAGE}" | awk '{print $2}' | grep -qx "${TEMPLATE_NAME}"; then
+  echo "Template noch nicht lokal vorhanden - wird auf '${TEMPLATE_STORAGE}' geladen..."
   pveam download "${TEMPLATE_STORAGE}" "${TEMPLATE_NAME}"
 fi
 
