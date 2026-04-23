@@ -16,6 +16,10 @@ if [[ "${EUID}" -ne 0 ]]; then
   exit 1
 fi
 
+# Weniger Locale-Warnungen bei psql/postgres-Client (z. B. in minimalen CTs).
+export LC_ALL=C
+export LANG=C
+
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../../.." && pwd)"
 API_DIR="${REPO_ROOT}/fokuno_proxmox/deploy/staging_api"
@@ -40,6 +44,25 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+wait_for_api_health() {
+  local url="$1"
+  local max="${2:-45}"
+  local i=0
+  echo "Warte auf API unter ${url} (max. ${max}s)..."
+  while (( i < max )); do
+    if curl -fsS --connect-timeout 2 --max-time 5 "${url}" >/dev/null 2>&1; then
+      echo "API antwortet nach ca. $((i + 1))s."
+      return 0
+    fi
+    ((i++)) || true
+    sleep 1
+  done
+  echo "Fehler: API antwortet nicht auf ${url}" >&2
+  systemctl status "${SYSTEMD_SERVICE}.service" --no-pager -l || true
+  journalctl -u "${SYSTEMD_SERVICE}.service" -n 80 --no-pager || true
+  return 1
+}
 
 as_user() {
   local user="$1"
@@ -275,9 +298,10 @@ EOF
 
 systemctl daemon-reload
 systemctl enable --now "${SYSTEMD_SERVICE}.service"
+systemctl restart "${SYSTEMD_SERVICE}.service" 2>/dev/null || true
 
 echo "[7/9] Lokalen API-Healthcheck prüfen..."
-curl -fsS "http://127.0.0.1:8000/health" >/dev/null
+wait_for_api_health "http://127.0.0.1:8000/health" 60
 
 echo "[8/9] NGINX Reverse Proxy..."
 cat > "/etc/nginx/sites-available/${NGINX_SITE}" <<EOF
