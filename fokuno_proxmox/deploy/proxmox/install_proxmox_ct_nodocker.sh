@@ -62,6 +62,33 @@ prompt_required() {
   printf -v "${key}" "%s" "${value}"
 }
 
+prompt_secret_confirm() {
+  local key="$1"
+  local label="$2"
+  local hinweis="$3"
+  local value=""
+  local confirm=""
+  while true; do
+    echo
+    echo "${label}"
+    echo "  ${hinweis}"
+    read -r -s -p "> " value
+    echo
+    if [[ -z "${value}" ]]; then
+      echo "Eingabe fehlt (${key}). Bitte erneut eingeben." >&2
+      continue
+    fi
+    read -r -s -p "> Bitte zur Bestätigung erneut eingeben: " confirm
+    echo
+    if [[ "${value}" != "${confirm}" ]]; then
+      echo "Eingaben stimmen nicht überein. Bitte erneut eingeben." >&2
+      continue
+    fi
+    printf -v "${key}" "%s" "${value}"
+    return 0
+  done
+}
+
 prompt_default() {
   local key="$1"
   local label="$2"
@@ -168,19 +195,17 @@ if ! mail_valid "${ADMIN_EMAIL}"; then
   exit 1
 fi
 
-prompt_required POSTGRES_PASSWORD \
+prompt_secret_confirm POSTGRES_PASSWORD \
   "11/12 PostgreSQL Passwort" \
-  "Starkes Passwort für den Datenbank-Benutzer." \
-  1
+  "Starkes Passwort für den Datenbank-Benutzer (mit Zweiteingabe)."
 
-prompt_required API_TOKEN_SECRET \
+prompt_secret_confirm API_TOKEN_SECRET \
   "12/12 API Token Secret" \
-  "Langer zufälliger Wert für Signierung der Tokens." \
-  1
+  "Langer zufälliger Wert für Signierung der Tokens (mit Zweiteingabe)."
 
 prompt_default DUCKDNS_TOKEN \
   "Optional: DuckDNS Token" \
-  "Leer lassen, wenn DuckDNS bereits getrennt läuft." \
+  "Leer lassen, wenn du den DuckDNS-Update-Job bereits separat eingerichtet hast." \
   ""
 
 echo

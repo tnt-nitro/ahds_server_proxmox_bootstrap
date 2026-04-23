@@ -83,6 +83,33 @@ prompt_required() {
   printf -v "${key}" "%s" "${value}"
 }
 
+prompt_secret_confirm() {
+  local key="$1"
+  local label="$2"
+  local hinweis="$3"
+  local value=""
+  local confirm=""
+  while true; do
+    echo
+    echo "${label}"
+    echo "  ${hinweis}"
+    read -r -s -p "> " value
+    echo
+    if [[ -z "${value}" ]]; then
+      echo "Eingabe fehlt (${key}). Bitte erneut eingeben." >&2
+      continue
+    fi
+    read -r -s -p "> Bitte zur Bestätigung erneut eingeben: " confirm
+    echo
+    if [[ "${value}" != "${confirm}" ]]; then
+      echo "Eingaben stimmen nicht überein. Bitte erneut eingeben." >&2
+      continue
+    fi
+    printf -v "${key}" "%s" "${value}"
+    return 0
+  done
+}
+
 prompt_optional() {
   local key="$1"
   local label="$2"
@@ -141,15 +168,13 @@ else
     "2/6 TLS E-Mail (Let's Encrypt Kontakt)" \
     "Beispiel: dein.name@example.org"
 
-  prompt_required POSTGRES_PASSWORD \
+  prompt_secret_confirm POSTGRES_PASSWORD \
     "3/6 PostgreSQL Passwort" \
-    "Starkes Passwort für DB-Benutzer '${POSTGRES_USER}'." \
-    1
+    "Starkes Passwort für DB-Benutzer '${POSTGRES_USER}' (mit Zweiteingabe)."
 
-  prompt_required API_TOKEN_SECRET \
+  prompt_secret_confirm API_TOKEN_SECRET \
     "4/6 API Token Secret" \
-    "Langer, zufälliger Wert für Signierung der API-Tokens." \
-    1
+    "Langer, zufälliger Wert für Signierung der API-Tokens (mit Zweiteingabe)."
 
   prompt_required ADMIN_EMAIL \
     "5/6 Admin E-Mail für die API" \
@@ -157,7 +182,7 @@ else
 
   prompt_optional DUCKDNS_TOKEN \
     "6/6 DuckDNS Token (optional)" \
-    "Nur nötig, wenn dieses Script den DuckDNS-Cronjob setzen soll. Sonst leer lassen."
+    "Nur nötig, wenn dieses Script den DuckDNS-Cronjob setzen soll. Leer lassen, wenn der DuckDNS-Update-Job bereits separat eingerichtet ist."
 fi
 
 if ! domain_valid "${STAGING_DOMAIN}"; then
