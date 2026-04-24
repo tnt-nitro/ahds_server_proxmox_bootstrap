@@ -736,6 +736,10 @@ def root() -> HTMLResponse:
         padding: 8px 12px;
         cursor: pointer;
       }}
+      .btn.secondary {{
+        background: #6f6b64;
+        margin-left: 8px;
+      }}
       .smalllink {{
         margin: 6px 0 12px;
         font-size: 0.92rem;
@@ -769,6 +773,7 @@ def root() -> HTMLResponse:
           <span class="pill">APP_ENV: {env}</span>
           <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
           <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
+          <button class="btn secondary" type="button" onclick="window.location.reload();">Aktualisieren</button>
         </div>
 
         <div class="grid">
