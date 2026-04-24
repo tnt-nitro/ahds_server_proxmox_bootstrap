@@ -1,9 +1,15 @@
 # API Changelog (Staging API)
 
+## 0.3.3
+
+- Root-Seite: Buttons „Aktualisieren“, „Update prüfen“, „Update installieren“ entfernt
+- Stattdessen Anzeige des letzten Host-Update-Laufs (`update_status.json`) mit UTC-Zeitstempel und Live-Zähler (Sekunden seit letztem Lauf)
+- Endpunkte `/update/status` und `/update/request` entfernt
+
 ## 0.3.2
 
 - Klarere Rückmeldung zu `/update/request`: Hinweis auf Proxmox-Host-Watcher bzw. manuelles Skript
-- Proxmox-Doku: Watcher-Timer (`ahds-native-update-on-request`) für nahezu sofortige Reaktion auf den Browser-Button
+- Proxmox-Doku: Watcher-Timer (`ahds-native-update-on-request`) bei vorhandener `update_request.json` im CT
 
 ## 0.3.1
 

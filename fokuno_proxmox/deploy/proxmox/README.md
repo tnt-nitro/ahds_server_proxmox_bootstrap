@@ -68,14 +68,11 @@ chmod +x native_update_ct.sh
 CTID=113 ./native_update_ct.sh
 ```
 
-Die Browser-Seite (`/`) bietet zusätzlich:
+Die Startseite (`/`) zeigt unter den Status-Pills den **letzten Host-Update-Lauf** (Zeitpunkt in UTC, Ergebnis, Commit-Kurzform) sowie einen **Live-Zähler** („seit letztem Host-Update-Lauf“), der im Browser jede Sekunde aktualisiert wird. Datenquelle ist `/opt/ahds-native/data/update_status.json` im CT (wird von `native_update_ct.sh` geschrieben).
 
-- **Update prüfen**: zeigt den letzten Updater-Status an
-- **Update installieren**: legt im CT eine Anforderungsdatei an; auf dem **Proxmox-Host** muss dafür der Watcher-Timer aktiv sein (siehe unten), sonst manuell `native_update_ct.sh` ausführen
+### Optional: Host reagiert auf Datei `update_request.json` im CT (Watcher)
 
-### Sofort-Update nach Klick im Browser (Watcher auf dem Host)
-
-Der API-Prozess läuft **im CT** und kann den Proxmox-Host nicht direkt ansteuern. Damit der Button trotzdem „sofort“ wirkt, gibt es auf dem Host ein kleines Skript plus Timer (ca. alle 45 Sekunden):
+Wenn du z. B. per Skript im CT die Datei `/opt/ahds-native/data/update_request.json` anlegst, kann der Host sie per Timer erkennen und `native_update_ct.sh` starten (ca. alle 45 Sekunden):
 
 ```bash
 cd /opt/ahds/fokuno_proxmox/deploy/proxmox

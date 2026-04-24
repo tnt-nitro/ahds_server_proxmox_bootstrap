@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
-app = FastAPI(title="AhDs Staging API", version="0.3.2")
+app = FastAPI(title="AhDs Staging API", version="0.3.3")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
@@ -38,9 +38,6 @@ _SERVER_STATUS_PATH = Path(
 )
 _UPDATE_STATUS_PATH = Path(
     os.environ.get("AHDS_UPDATE_STATUS_FILE", "/opt/ahds-native/data/update_status.json")
-)
-_UPDATE_REQUEST_PATH = Path(
-    os.environ.get("AHDS_UPDATE_REQUEST_FILE", "/opt/ahds-native/data/update_request.json")
 )
 _SERVER_STARTED_AT = dt.datetime.now(dt.timezone.utc)
 _SERVER_COUNTER: dict[str, int] = {"major": 0, "minor": 0, "patch": 0, "total": 0}
@@ -227,19 +224,6 @@ def _update_status_laden() -> dict[str, Any]:
     except Exception:
         pass
     return {"status": "error", "detail": "Update-Statusdatei ist ungültig."}
-
-
-def _update_request_schreiben() -> None:
-    _UPDATE_REQUEST_PATH.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "requested_at": _utc_now().isoformat(),
-        "source": "browser",
-        "note": "Update manuell angefordert",
-    }
-    _UPDATE_REQUEST_PATH.write_text(
-        json.dumps(payload, ensure_ascii=True, indent=2),
-        encoding="utf-8",
-    )
 
 
 def _admin_form_html(
@@ -682,6 +666,23 @@ def root() -> HTMLResponse:
         f"Working Title AhDs Staging Server | {env_build} | "
         f"v{_API_RELEASE} | User: Gast | Opened: {invocation}"
     )
+    host_update = _update_status_laden()
+    hu_checked = host_update.get("checked_at")
+    hu_checked_str = (
+        str(hu_checked).strip()
+        if isinstance(hu_checked, str) and str(hu_checked).strip()
+        else ""
+    )
+    hu_status = html.escape(str(host_update.get("status", "") or "—"), quote=True)
+    hu_detail = html.escape(str(host_update.get("detail", "") or "—"), quote=True)
+    hu_sha = host_update.get("deployed_sha")
+    if not hu_sha:
+        hu_sha_str = "—"
+    else:
+        s_sha = str(hu_sha)
+        hu_sha_str = s_sha[:12] + "…" if len(s_sha) > 12 else s_sha
+    hu_sha_esc = html.escape(hu_sha_str, quote=True)
+    hu_checked_attr = html.escape(hu_checked_str, quote=True)
     page_html = f"""<!doctype html>
 <html lang="de">
   <head>
@@ -774,9 +775,6 @@ def root() -> HTMLResponse:
         background: #6f6b64;
         margin-left: 8px;
       }}
-      .btn.update {{
-        background: #3f6e9d;
-      }}
       .smalllink {{
         margin: 6px 0 12px;
         font-size: 0.92rem;
@@ -810,11 +808,14 @@ def root() -> HTMLResponse:
           <span class="pill">APP_ENV: {env}</span>
           <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
           <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
-          <button class="btn secondary" type="button" onclick="window.location.reload();">Aktualisieren</button>
-          <button class="btn update" type="button" id="btn-update-check">Update prüfen</button>
-          <button class="btn update" type="button" id="btn-update-install">Update installieren</button>
         </div>
-        <div id="update-result" class="smalllink"></div>
+        <div class="smalllink muted" style="margin-top:4px;">
+          <strong>Host-Update (Proxmox, <code>native_update_ct.sh</code>):</strong><br />
+          Letzter Lauf (UTC): {html.escape(hu_checked_str or "—", quote=True)}<br />
+          Status: {hu_status} · Detail: {hu_detail}<br />
+          Deployment-Commit: <code>{hu_sha_esc}</code><br />
+          <span id="host-update-relative" class="muted" data-checked-at="{hu_checked_attr}"></span>
+        </div>
 
         <div class="grid">
           <section class="box loginbox">
@@ -887,38 +888,37 @@ Total: {_SERVER_COUNTER["total"]}</div>
         }}
       }});
 
-      const updateResult = document.getElementById("update-result");
-      const btnCheck = document.getElementById("btn-update-check");
-      const btnInstall = document.getElementById("btn-update-install");
-
-      btnCheck?.addEventListener("click", async () => {{
-        updateResult.textContent = "Prüfe Update-Status ...";
-        try {{
-          const res = await fetch("/update/status");
-          const data = await res.json();
-          updateResult.textContent =
-            "Update-Status: " + (data.status || "unknown") +
-            " | Letzte Prüfung: " + (data.checked_at || "-") +
-            " | Detail: " + (data.detail || "-");
-        }} catch (e) {{
-          updateResult.textContent = "Update-Prüfung fehlgeschlagen: " + String(e);
+      (function hostUpdateZeit() {{
+        const el = document.getElementById("host-update-relative");
+        if (!el) return;
+        const iso = (el.getAttribute("data-checked-at") || "").trim();
+        if (!iso) {{
+          el.textContent = "Zeitzähler: Noch kein Host-Updater-Lauf protokolliert (Datei update_status.json fehlt).";
+          return;
         }}
-      }});
-
-      btnInstall?.addEventListener("click", async () => {{
-        updateResult.textContent = "Update-Anforderung wird gespeichert ...";
-        try {{
-          const res = await fetch("/update/request", {{ method: "POST" }});
-          const data = await res.json();
-          if (!res.ok) {{
-            updateResult.textContent = "Update-Anforderung fehlgeschlagen: " + (data.detail || res.status);
+        const t0 = Date.parse(iso);
+        if (Number.isNaN(t0)) {{
+          el.textContent = "Zeitzähler: Zeitstempel nicht lesbar.";
+          return;
+        }}
+        function tick() {{
+          const sec = Math.floor((Date.now() - t0) / 1000);
+          if (sec < 0) {{
+            el.textContent = "Zeitzähler: Zeitstempel liegt in der Zukunft.";
             return;
           }}
-          updateResult.textContent = data.detail || "Update angefordert.";
-        }} catch (e) {{
-          updateResult.textContent = "Update-Anforderung fehlgeschlagen: " + String(e);
+          const h = Math.floor(sec / 3600);
+          const m = Math.floor((sec % 3600) / 60);
+          const s = sec % 60;
+          const teile = [];
+          if (h > 0) teile.push(h + " h");
+          if (h > 0 || m > 0) teile.push(m + " min");
+          teile.push(s + " s");
+          el.textContent = "Zeitzähler seit letztem Host-Update-Lauf: " + teile.join(" ");
         }}
-      }});
+        tick();
+        setInterval(tick, 1000);
+      }})();
     </script>
   </body>
 </html>
@@ -992,24 +992,6 @@ def admin_panel_save(
             meldung="Gespeichert. Für volle Wirkung bei Secrets/DB: Service neu starten.",
         )
     )
-
-
-@app.get("/update/status")
-def update_status() -> dict[str, Any]:
-    return _update_status_laden()
-
-
-@app.post("/update/request")
-def update_request() -> dict[str, str]:
-    _update_request_schreiben()
-    return {
-        "status": "ok",
-        "detail": (
-            "Update wurde angefordert. Auf dem Proxmox-Host startet der Watcher-Timer "
-            "(ahds-native-update-on-request, siehe README) in der Regel innerhalb von etwa einer Minute "
-            "das Einspielen; ohne diesen Timer bitte auf dem Host manuell native_update_ct.sh ausführen."
-        ),
-    }
 
 
 @app.get("/v1/meta/version", summary="API-Version und Kompatibilitaet")
