@@ -40,6 +40,51 @@ bash -c "$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/ahds-proxmox-b
 
 Damit wird das private Repo unter `/opt/ahds` aktualisiert/geklont und anschließend der CT-Installer gestartet.
 
+## Warum /admin evtl. nicht sichtbar war
+
+Wenn die Browser-Seite nicht den neuesten Stand zeigt (z. B. `/admin` fehlt), läuft meist noch alter Code im CT.
+Dann ausführen:
+
+```bash
+cd /opt/ahds
+git pull --ff-only origin main
+pct exec 113 -- systemctl restart ahds-staging-api
+```
+
+Danach testen:
+
+```bash
+curl -I http://192.168.178.87:8000/
+curl -I http://192.168.178.87:8000/admin
+```
+
+## Automatisches Update (ohne Docker)
+
+Es gibt jetzt ein Update-Skript, das neue Commits holt und in den CT einspielt:
+
+```bash
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
+chmod +x native_update_ct.sh
+CTID=113 ./native_update_ct.sh
+```
+
+### Auto-Update per systemd-Timer (alle 15 Minuten)
+
+```bash
+cp systemd/ahds-native-update.service /etc/systemd/system/
+cp systemd/ahds-native-update.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ahds-native-update.timer
+```
+
+Prüfen:
+
+```bash
+systemctl status ahds-native-update.timer
+systemctl list-timers | grep ahds-native-update
+journalctl -u ahds-native-update.service -n 80 --no-pager
+```
+
 ## Schnellstart ohne Docker (empfohlen für deinen Fall)
 
 Wenn du **kein Docker** auf dem Proxmox-Host willst, nutze den nativen Installer:

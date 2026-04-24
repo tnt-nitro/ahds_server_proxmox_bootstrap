@@ -1,0 +1,11 @@
+[Unit]
+Description=AhDs Native CT Update alle 15 Minuten
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=15min
+Persistent=true
+Unit=ahds-native-update.service
+
+[Install]
+WantedBy=timers.target
