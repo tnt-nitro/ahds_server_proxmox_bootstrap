@@ -1,5 +1,10 @@
 # API Changelog (Staging API)
 
+## 0.3.8
+
+- Anzeige-Fallback für Host-Update-Intervall (ohne `poll_interval_seconds` in alter JSON): Standard **300 s** (5 min), Umgebung `AHDS_UPDATE_POLL_INTERVAL_SECONDS`
+- Proxmox-Deploy: Auto-Update-Standard von 15 min auf **5 min** (`ahds-native-update.timer`, `native_update_ct.sh`, `UPDATE_POLL_INTERVAL_SECONDS=300` in den Units)
+
 ## 0.3.7
 
 - Erreichbarkeit: dritte Anzeige **Server API (:Port)** für direkten `/health`-Aufruf (Standard 8000, steuerbar mit `AHDS_API_HEALTH_PORT` / `PORT`)
@@ -14,9 +19,9 @@
 ## 0.3.5
 
 - Root-Seite: letzter Host-Lauf doppelt angezeigt (Ortszeit per `AHDS_DISPLAY_TZ`, Standard Europe/Berlin, plus UTC) — behebt die zuvor nur-UTC-Verwirrung
-- `update_status.json`: Host schreibt `next_poll_at` und `poll_interval_seconds` (Intervall per `UPDATE_POLL_INTERVAL_SECONDS`, Standard 900)
+- `update_status.json`: Host schreibt `next_poll_at` und `poll_interval_seconds` (Intervall per `UPDATE_POLL_INTERVAL_SECONDS` am Host)
 - Root-Seite: „Zeitzähler seit …“ durch **Update-Countdown** bis zur nächsten geplanten Prüfung ersetzt
-- systemd: `UPDATE_POLL_INTERVAL_SECONDS=900` in den Update-Units gesetzt
+- systemd: `UPDATE_POLL_INTERVAL_SECONDS` in den Update-Units (zum Timer passend)
 
 ## 0.3.4
 

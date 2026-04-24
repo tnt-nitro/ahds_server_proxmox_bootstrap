@@ -27,14 +27,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.3.7")
+app = FastAPI(title="AhDs Staging API", version="0.3.8")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.1.4"
+_SERVER_UI_VERSION = "ui-0.1.5"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
@@ -133,9 +133,9 @@ def _poll_intervall_sekunden(host_update: dict[str, Any]) -> int:
     except (TypeError, ValueError):
         pass
     try:
-        return max(60, int(os.environ.get("AHDS_UPDATE_POLL_INTERVAL_SECONDS", "900")))
+        return max(60, int(os.environ.get("AHDS_UPDATE_POLL_INTERVAL_SECONDS", "300")))
     except ValueError:
-        return 900
+        return 300
 
 
 def _poll_intervall_text(sek: int) -> str:

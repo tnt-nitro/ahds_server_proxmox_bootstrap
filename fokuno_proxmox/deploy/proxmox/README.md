@@ -71,8 +71,8 @@ CTID=113 ./native_update_ct.sh
 Die Startseite (`/`) zeigt unter den Status-Pills den **letzten Host-Update-Lauf** (Ortszeit z. B. `Europe/Berlin` plus UTC), das **konfigurierte Prüf-Intervall**, die **nächste geplante Prüfzeit** (`next_poll_at`, aus dem Host-Skript) und einen **Update-Countdown** (Restzeit bis `next_poll_at`). Datenquelle: `/opt/ahds-native/data/update_status.json` im CT (schreibt `native_update_ct.sh`).
 
 - **Ortszeit in der API:** Umgebungsvariable `AHDS_DISPLAY_TZ` (Standard `Europe/Berlin`) im systemd-Service `ahds-staging-api` setzen, falls du eine andere Zone brauchst.
-- **Intervall-Fallback ohne `next_poll_at` in alter JSON:** `AHDS_UPDATE_POLL_INTERVAL_SECONDS` im CT (Standard `900`) — nach dem nächsten Host-Lauf steht `next_poll_at` zuverlässig in der Datei.
-- **Host:** Variable `UPDATE_POLL_INTERVAL_SECONDS` muss zum systemd-Timer passen (z. B. `900` bei `OnUnitActiveSec=15min`); siehe `ahds-native-update.service`.
+- **Intervall-Fallback ohne `next_poll_at` in alter JSON:** `AHDS_UPDATE_POLL_INTERVAL_SECONDS` im CT (Standard `300`) — nach dem nächsten Host-Lauf steht `next_poll_at` zuverlässig in der Datei.
+- **Host:** Variable `UPDATE_POLL_INTERVAL_SECONDS` muss zum systemd-Timer passen (z. B. `300` bei `OnUnitActiveSec=5min`); siehe `ahds-native-update.service`.
 
 Zusätzlich prüft die API im CT selbstständig in einem Intervall (**Server NET** = NGINX :443, **Server WEB** = DNS, **Server API** = direkter Uvicorn-Port; siehe `fokuno_proxmox/deploy/staging_api/README.md`, Variable `AHDS_REACHABILITY_INTERVAL_SEC`).
 
@@ -98,7 +98,7 @@ systemctl status ahds-native-update-on-request.timer
 journalctl -u ahds-native-update-on-request.service -n 40 --no-pager
 ```
 
-### Auto-Update per systemd-Timer (alle 15 Minuten, optional)
+### Auto-Update per systemd-Timer (alle 5 Minuten, optional)
 
 Periodisches Einspielen neuer Commits **ohne** Klick im Browser:
 
@@ -108,6 +108,8 @@ cp systemd/ahds-native-update.timer /etc/systemd/system/
 systemctl daemon-reload
 systemctl enable --now ahds-native-update.timer
 ```
+
+**Bereits eingerichtet und nur Intervall/Units aktualisieren:** geänderte `ahds-native-update.service` und `ahds-native-update.timer` erneut nach `/etc/systemd/system/` kopieren, dann `systemctl daemon-reload` und `systemctl restart ahds-native-update.timer`.
 
 Prüfen:
 

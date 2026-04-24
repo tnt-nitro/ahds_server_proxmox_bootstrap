@@ -14,8 +14,8 @@ CTID="${CTID:-113}"
 REPO_DIR="${REPO_DIR:-/opt/ahds}"
 BRANCH="${BRANCH:-main}"
 APP_DIR_IN_CT="${APP_DIR_IN_CT:-/opt/ahds-native}"
-# Muss zum systemd-Timer passen (z. B. 15 min = 900), siehe ahds-native-update.service
-UPDATE_POLL_INTERVAL_SECONDS="${UPDATE_POLL_INTERVAL_SECONDS:-900}"
+# Muss zum systemd-Timer passen (z. B. 5 min = 300), siehe ahds-native-update.service
+UPDATE_POLL_INTERVAL_SECONDS="${UPDATE_POLL_INTERVAL_SECONDS:-300}"
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
