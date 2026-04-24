@@ -28,7 +28,7 @@ docker compose -f staging-compose.yml up -d
 
 ## Wichtige Endpunkte
 
-- `GET /` – AhDs Browser-Startseite (Server erreichbar + Links)
+- `GET /` – AhDs Browser-Startseite (u. a. **Server NET** / **Server WEB** Erreichbarkeit, Host-Update-Infos, Login)
 - `GET /admin` – Admin-Seite für Runtime-Werte (.env)
 - `GET /health` – Liveness
 - `GET /ready` – DB-Readiness
@@ -46,6 +46,15 @@ docker compose -f staging-compose.yml up -d
 - `GET /v1/admin/users` (nur `admin`)
 - `GET /v1/admin/audit-logs` (nur `admin`)
 - `GET /v1/admin/logs` (deprecated Alias auf Audit-Logs)
+
+## Erreichbarkeit NET/WEB (Startseite `/`)
+
+Im Hintergrund prüft die API regelmäßig (Standard alle **120** Sekunden, Minimum **30**):
+
+- **Server NET**: HTTPS `GET /health` zu **127.0.0.1:443** mit TLS-SNI `STAGING_DOMAIN` (läuft über NGINX auf derselben Maschine).
+- **Server WEB**: HTTPS `GET /health` zu **`STAGING_DOMAIN`** per normalem DNS/TLS (wie ein Client von außen; ohne NAT-Hairpin kann WEB rot bleiben, obwohl NET grün ist).
+
+Steuerung: Umgebungsvariable **`AHDS_REACHABILITY_INTERVAL_SEC`** (z. B. in der systemd-Unit oder `.env`).
 
 ## Admin-Seite (temporär)
 

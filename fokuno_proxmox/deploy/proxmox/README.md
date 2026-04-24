@@ -74,6 +74,8 @@ Die Startseite (`/`) zeigt unter den Status-Pills den **letzten Host-Update-Lauf
 - **Intervall-Fallback ohne `next_poll_at` in alter JSON:** `AHDS_UPDATE_POLL_INTERVAL_SECONDS` im CT (Standard `900`) — nach dem nächsten Host-Lauf steht `next_poll_at` zuverlässig in der Datei.
 - **Host:** Variable `UPDATE_POLL_INTERVAL_SECONDS` muss zum systemd-Timer passen (z. B. `900` bei `OnUnitActiveSec=15min`); siehe `ahds-native-update.service`.
 
+Zusätzlich prüft die API im CT selbstständig in einem Intervall (**Server NET** / **Server WEB**, siehe `fokuno_proxmox/deploy/staging_api/README.md`, Variable `AHDS_REACHABILITY_INTERVAL_SEC`), ob NGINX/TLS lokal und der öffentliche Hostname erreichbar sind.
+
 ### Optional: Host reagiert auf Datei `update_request.json` im CT (Watcher)
 
 Wenn du z. B. per Skript im CT die Datei `/opt/ahds-native/data/update_request.json` anlegst, kann der Host sie per Timer erkennen und `native_update_ct.sh` starten (ca. alle 45 Sekunden):

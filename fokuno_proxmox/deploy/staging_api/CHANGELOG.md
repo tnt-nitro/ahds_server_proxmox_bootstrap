@@ -1,5 +1,11 @@
 # API Changelog (Staging API)
 
+## 0.3.6
+
+- Root-Seite: automatische Erreichbarkeitsprüfung **Server NET** (HTTPS `/health` über NGINX, Loopback 127.0.0.1 mit SNI) und **Server WEB** (gleicher Hostname per DNS/TLS wie von außen)
+- Hintergrundtask alle `AHDS_REACHABILITY_INTERVAL_SEC` (Standard 120), erste Prüfung nach kurzer Startverzögerung
+- Pill-Farben: grün erreichbar, rot nicht erreichbar, grau ausstehend (vor erster Prüfung)
+
 ## 0.3.5
 
 - Root-Seite: letzter Host-Lauf doppelt angezeigt (Ortszeit per `AHDS_DISPLAY_TZ`, Standard Europe/Berlin, plus UTC) — behebt die zuvor nur-UTC-Verwirrung

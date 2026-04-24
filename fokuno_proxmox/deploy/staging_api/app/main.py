@@ -2,15 +2,19 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import datetime as dt
 import hashlib
 import hmac
 import html
+import http.client
 import json
 import os
 from pathlib import Path
 import secrets
+import ssl
+import threading
 import time
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -23,14 +27,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.3.5")
+app = FastAPI(title="AhDs Staging API", version="0.3.6")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.1.2"
+_SERVER_UI_VERSION = "ui-0.1.3"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
@@ -43,6 +47,16 @@ _UPDATE_STATUS_PATH = Path(
 )
 _SERVER_STARTED_AT = dt.datetime.now(dt.timezone.utc)
 _SERVER_COUNTER: dict[str, int] = {"major": 0, "minor": 0, "patch": 0, "total": 0}
+
+_REACHABILITY_LOCK = threading.Lock()
+_REACHABILITY: dict[str, Any] = {
+    "net_ok": None,
+    "web_ok": None,
+    "net_detail": "",
+    "web_detail": "",
+    "checked_at": "",
+}
+_REACHABILITY_TASK: asyncio.Task[Any] | None = None
 _DEPRECATED_PATHS: dict[str, dict[str, str]] = {
     "/v1/admin/logs": {
         "sunset": "Wed, 31 Dec 2026 23:59:59 GMT",
@@ -296,6 +310,127 @@ def _update_status_laden() -> dict[str, Any]:
     except Exception:
         pass
     return {"status": "error", "detail": "Update-Statusdatei ist ungültig."}
+
+
+def _staging_domain_oeffentlich() -> str:
+    d = (os.environ.get("STAGING_DOMAIN") or "").strip()
+    if d:
+        return d
+    return (_runtime_env_laden().get("STAGING_DOMAIN") or "").strip()
+
+
+def _reachability_lesen() -> dict[str, Any]:
+    with _REACHABILITY_LOCK:
+        return dict(_REACHABILITY)
+
+
+def _reachability_schreiben(**kwargs: Any) -> None:
+    with _REACHABILITY_LOCK:
+        _REACHABILITY.update(kwargs)
+
+
+def _https_health_net(staging_domain: str) -> tuple[bool, str]:
+    """NGINX+TLS lokal: 127.0.0.1:443 mit SNI wie der öffentliche Hostname."""
+    if not staging_domain:
+        return False, "STAGING_DOMAIN fehlt"
+    ctx = ssl.create_default_context()
+    try:
+        conn = http.client.HTTPSConnection(
+            "127.0.0.1",
+            port=443,
+            timeout=10.0,
+            context=ctx,
+            server_hostname=staging_domain,
+        )
+        conn.request("GET", "/health", headers={"Host": staging_domain})
+        res = conn.getresponse()
+        raw = res.read(4000)
+        conn.close()
+        if res.status != 200:
+            return False, f"HTTP {res.status}"
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except Exception:
+            return False, "Antwort ist kein JSON"
+        if data.get("status") == "ok":
+            return True, "HTTPS /health über NGINX (Loopback)"
+        return False, f"Unerwarteter JSON-Status: {data.get('status')!r}"
+    except Exception as exc:
+        return False, str(exc)[:220]
+
+
+def _https_health_web(staging_domain: str) -> tuple[bool, str]:
+    """Wie ein Client von außen: DNS + TLS + /health."""
+    if not staging_domain:
+        return False, "STAGING_DOMAIN fehlt"
+    ctx = ssl.create_default_context()
+    try:
+        conn = http.client.HTTPSConnection(
+            staging_domain,
+            port=443,
+            timeout=15.0,
+            context=ctx,
+        )
+        conn.request("GET", "/health")
+        res = conn.getresponse()
+        raw = res.read(4000)
+        conn.close()
+        if res.status != 200:
+            return False, f"HTTP {res.status}"
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except Exception:
+            return False, "Antwort ist kein JSON"
+        if data.get("status") == "ok":
+            return True, "HTTPS /health über öffentlichen Hostnamen"
+        return False, f"Unerwarteter JSON-Status: {data.get('status')!r}"
+    except Exception as exc:
+        return False, str(exc)[:220]
+
+
+def _reachability_einmal_pruefen() -> None:
+    domain = _staging_domain_oeffentlich()
+    zeit = _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not domain:
+        _reachability_schreiben(
+            net_ok=False,
+            web_ok=False,
+            net_detail="STAGING_DOMAIN fehlt",
+            web_detail="STAGING_DOMAIN fehlt",
+            checked_at=zeit,
+        )
+        return
+    net_ok, net_de = _https_health_net(domain)
+    web_ok, web_de = _https_health_web(domain)
+    _reachability_schreiben(
+        net_ok=net_ok,
+        web_ok=web_ok,
+        net_detail=net_de,
+        web_detail=web_de,
+        checked_at=zeit,
+    )
+
+
+async def _reachability_schleife() -> None:
+    try:
+        inter = max(30, int(os.environ.get("AHDS_REACHABILITY_INTERVAL_SEC", "120")))
+    except ValueError:
+        inter = 120
+    await asyncio.sleep(8)
+    while True:
+        try:
+            await asyncio.to_thread(_reachability_einmal_pruefen)
+        except Exception as exc:
+            zeit = _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
+            msg = f"Prüffehler: {exc}"[:220]
+            _reachability_schreiben(
+                net_ok=False,
+                web_ok=False,
+                net_detail=msg,
+                web_detail=msg,
+                checked_at=zeit,
+            )
+        await asyncio.sleep(inter)
 
 
 def _admin_form_html(
@@ -662,6 +797,26 @@ def startup_migrationen() -> None:
     _server_counter_aktualisieren()
 
 
+@app.on_event("startup")
+async def startup_erreichbarkeit() -> None:
+    """Periodisch NET (NGINX Loopback) und WEB (öffentlicher DNS) prüfen."""
+    global _REACHABILITY_TASK
+    _REACHABILITY_TASK = asyncio.create_task(_reachability_schleife())
+
+
+@app.on_event("shutdown")
+async def shutdown_erreichbarkeit() -> None:
+    global _REACHABILITY_TASK
+    t = _REACHABILITY_TASK
+    _REACHABILITY_TASK = None
+    if t is not None:
+        t.cancel()
+        try:
+            await t
+        except asyncio.CancelledError:
+            pass
+
+
 @app.middleware("http")
 async def api_versions_header(request: Request, call_next):  # type: ignore[no-untyped-def]
     if request.url.path.startswith("/v1") and request.url.path != "/v1/meta/version":
@@ -770,6 +925,35 @@ def root() -> HTMLResponse:
         s_sha = str(hu_sha)
         hu_sha_str = s_sha[:12] + "…" if len(s_sha) > 12 else s_sha
     hu_sha_esc = html.escape(hu_sha_str, quote=True)
+    rch = _reachability_lesen()
+    try:
+        rch_inter = max(30, int(os.environ.get("AHDS_REACHABILITY_INTERVAL_SEC", "120")))
+    except ValueError:
+        rch_inter = 120
+    rch_inter_e = html.escape(str(rch_inter), quote=True)
+    rch_checked_e = html.escape(str(rch.get("checked_at") or "—"), quote=True)
+
+    def _pill_erreichbarkeit(ok: Any, kurz: str, detail: str) -> str:
+        if ok is True:
+            cls, kurz_txt = "ok", f"{kurz} · erreichbar"
+        elif ok is False:
+            cls, kurz_txt = "warn", f"{kurz} · nicht erreichbar"
+        else:
+            cls, kurz_txt = "neutral", f"{kurz} · ausstehend"
+        titel = html.escape((detail or "")[:480], quote=True)
+        txt = html.escape(kurz_txt, quote=True)
+        return f'<span class="pill {cls}" title="{titel}">{txt}</span>'
+
+    pill_net = _pill_erreichbarkeit(
+        rch.get("net_ok"),
+        "Server NET",
+        str(rch.get("net_detail") or ""),
+    )
+    pill_web = _pill_erreichbarkeit(
+        rch.get("web_ok"),
+        "Server WEB",
+        str(rch.get("web_detail") or ""),
+    )
     page_html = f"""<!doctype html>
 <html lang="de">
   <head>
@@ -824,6 +1008,7 @@ def root() -> HTMLResponse:
       }}
       .ok {{ color: #1f6b37; border-color: #9ed0ae; background: #edf8f0; }}
       .warn {{ color: var(--danger); border-color: #e4aaaa; background: #fff2f2; }}
+      .neutral {{ color: #5a564e; border-color: #d0ccc4; background: #f2f0ec; }}
       .grid {{
         margin-top: 14px;
         display: grid;
@@ -891,10 +1076,15 @@ def root() -> HTMLResponse:
         <div class="titlebar">{html.escape(title_line)}</div>
         <h1>Bei AhDs Staging Server anmelden</h1>
         <div>
-          <span class="pill ok">Server erreichbar</span>
+          {pill_net}
+          {pill_web}
           <span class="pill">APP_ENV: {env}</span>
           <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
           <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
+        </div>
+        <div class="smalllink muted">
+          Erreichbarkeit: NET = NGINX+TLS auf diesem Rechner (Loopback), WEB = gleicher Hostname per DNS von hier aus.
+          Letzte Prüfung: {rch_checked_e} UTC · Intervall ca. {rch_inter_e} s (Umgebung <code>AHDS_REACHABILITY_INTERVAL_SEC</code>).
         </div>
         <div class="smalllink muted" style="margin-top:4px;">
           <strong>Host-Update (Proxmox, <code>native_update_ct.sh</code>):</strong><br />
