@@ -15,7 +15,7 @@ from typing import Any
 
 import psycopg
 from fastapi import FastAPI, Header, HTTPException, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
@@ -27,6 +27,7 @@ _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
+_SERVER_UI_VERSION = "ui-0.1.0"
 _DEPRECATED_PATHS: dict[str, dict[str, str]] = {
     "/v1/admin/logs": {
         "sunset": "Wed, 31 Dec 2026 23:59:59 GMT",
@@ -390,8 +391,138 @@ def ready(response: Response) -> dict[str, Any]:
 
 
 @app.get("/")
-def root() -> dict[str, str]:
-    return {"service": "ahds-staging-api", "app_env": _app_env()}
+def root() -> HTMLResponse:
+    env = _app_env()
+    env_titel = {
+        "dev": "Developmentserver",
+        "staging": "Testserver",
+        "prod": "Produktivserver",
+    }.get(env, "Server")
+    html = f"""<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AhDs {env_titel}</title>
+    <style>
+      :root {{
+        color-scheme: light;
+        --bg: #f5f0e6;
+        --card: #fffef8;
+        --text: #35312b;
+        --muted: #6f6b64;
+        --accent: #9f8a60;
+        --danger: #b93f3f;
+      }}
+      body {{
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }}
+      .wrap {{
+        max-width: 920px;
+        margin: 28px auto;
+        padding: 0 16px;
+      }}
+      .card {{
+        background: var(--card);
+        border: 1px solid #e5dccb;
+        border-radius: 14px;
+        padding: 18px 18px 16px;
+        box-shadow: 0 4px 14px rgba(25, 18, 8, 0.05);
+      }}
+      h1 {{
+        margin: 0 0 8px;
+        font-size: 1.35rem;
+      }}
+      .muted {{ color: var(--muted); }}
+      .pill {{
+        display: inline-block;
+        margin: 8px 8px 8px 0;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        border: 1px solid #d8ccb8;
+      }}
+      .ok {{ color: #1f6b37; border-color: #9ed0ae; background: #edf8f0; }}
+      .warn {{ color: var(--danger); border-color: #e4aaaa; background: #fff2f2; }}
+      .grid {{
+        margin-top: 14px;
+        display: grid;
+        gap: 10px;
+        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+      }}
+      .box {{
+        border: 1px solid #eadfce;
+        border-radius: 10px;
+        padding: 10px 11px;
+        background: #fff;
+      }}
+      .box h2 {{
+        font-size: 0.96rem;
+        margin: 0 0 8px;
+      }}
+      a {{ color: var(--accent); text-decoration: none; }}
+      a:hover {{ text-decoration: underline; }}
+      code {{
+        font-family: Consolas, "Courier New", monospace;
+        background: #f9f5ee;
+        border-radius: 6px;
+        padding: 2px 5px;
+      }}
+      ul {{
+        margin: 0;
+        padding-left: 18px;
+      }}
+      li {{ margin: 4px 0; }}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <h1>AhDs {env_titel}</h1>
+        <div class="muted">Browser-Startseite für deinen Serverzugriff im Netzwerk/Internet.</div>
+        <div>
+          <span class="pill ok">Server erreichbar</span>
+          <span class="pill">APP_ENV: {env}</span>
+          <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
+          <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
+        </div>
+
+        <div class="grid">
+          <section class="box">
+            <h2>Status</h2>
+            <ul>
+              <li><a href="/health">/health</a> (Liveness)</li>
+              <li><a href="/ready">/ready</a> (DB-Readiness)</li>
+              <li><a href="/v1/meta/version">/v1/meta/version</a></li>
+            </ul>
+          </section>
+          <section class="box">
+            <h2>API und Login</h2>
+            <ul>
+              <li><a href="/docs">/docs</a> (interaktive API-Doku)</li>
+              <li><code>POST /v1/auth/login</code></li>
+              <li><code>POST /v1/auth/register</code></li>
+              <li><code>GET /v1/users/me</code> (mit Bearer-Token)</li>
+            </ul>
+          </section>
+          <section class="box">
+            <h2>Hinweis</h2>
+            <div class="muted">
+              Diese Seite bestätigt, dass dein AhDs-Server erreichbar ist.
+              Das eigentliche Benutzer-Login läuft aktuell über die API-Endpunkte
+              und wird später als vollständige Web-Login-Maske ergänzt.
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
+"""
+    return HTMLResponse(content=html)
 
 
 @app.get("/v1/meta/version", summary="API-Version und Kompatibilitaet")

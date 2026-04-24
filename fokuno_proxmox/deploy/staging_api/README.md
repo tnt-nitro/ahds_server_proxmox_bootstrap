@@ -28,6 +28,7 @@ docker compose -f staging-compose.yml up -d
 
 ## Wichtige Endpunkte
 
+- `GET /` – AhDs Browser-Startseite (Server erreichbar + Links)
 - `GET /health` – Liveness
 - `GET /ready` – DB-Readiness
 - `GET /v1/meta/version`
