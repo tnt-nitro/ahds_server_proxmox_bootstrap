@@ -1,5 +1,11 @@
 # API Changelog (Staging API)
 
+## 0.4.1
+
+- Startseite (`/`): Texte gestrafft, Layout für Deployment-Status (Raster), dezente Typografie (`tabular-nums`, Monospace-Zeiten)
+- Countdown zur nächsten Host-Prüfung: **T−** (verbleibend) und nach Fälligkeit **T+** (Überlauf in Sekunden bis zur nächsten Aktualisierung der Planzeit), ohne lange Hinweistexte
+- `_SERVER_UI_VERSION` auf `ui-0.2.1`
+
 ## 0.4.0
 
 - Startseite (`/`): Erreichbarkeits-Hintergrundprüfungen und NET/WEB/API-Pills entfernt; klarere, alltagstaugliche Texte

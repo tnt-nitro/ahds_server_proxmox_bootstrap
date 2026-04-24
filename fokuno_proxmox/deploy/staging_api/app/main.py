@@ -23,14 +23,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.4.0")
+app = FastAPI(title="AhDs Staging API", version="0.4.1")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.2.0"
+_SERVER_UI_VERSION = "ui-0.2.1"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
@@ -771,19 +771,11 @@ def root() -> HTMLResponse:
         "staging": "AhDs Staging Server",
         "prod": "AhDs Production Server",
     }.get(env, "Server")
-    env_build = {
-        "dev": "Development Build",
-        "staging": "Staging Build",
-        "prod": "Production Build",
-    }.get(env, "Unknown Build")
     major, minor, patch = _semver_aufloesen(_API_RELEASE)
     invocation = _utc_now().strftime("%Y-%m-%d %H:%M:%S")
     started = _SERVER_STARTED_AT.strftime("%Y-%m-%d %H:%M:%S")
     dev_days = (dt.date.today() - _SERVER_PROJECT_START).days
-    title_line = (
-        f"Working Title AhDs Staging Server | {env_build} | "
-        f"v{_API_RELEASE} | User: Gast | Opened: {invocation}"
-    )
+    title_line = f"{env_titel} · v{_API_RELEASE} · {invocation} UTC"
     host_update = _update_status_laden()
     hu_checked_raw = str(host_update.get("checked_at") or "").strip()
     hu_lokal, hu_utc = _host_letzter_lauf_anzeige(hu_checked_raw)
@@ -932,72 +924,148 @@ def root() -> HTMLResponse:
         white-space: pre-line;
         line-height: 1.45;
       }}
+      .tabular {{
+        font-variant-numeric: tabular-nums;
+      }}
+      .page-sub {{
+        margin: 2px 0 14px;
+        font-size: 0.88rem;
+        letter-spacing: 0.02em;
+      }}
+      .refresh-line {{
+        margin: 0 0 14px;
+        font-size: 0.82rem;
+        letter-spacing: 0.01em;
+      }}
+      .refresh-line .sep {{
+        margin: 0 0.35em;
+        opacity: 0.55;
+      }}
+      .host-meta {{
+        border: 1px solid #e8dfd0;
+        border-radius: 10px;
+        padding: 12px 14px 14px;
+        margin-bottom: 4px;
+        background: linear-gradient(180deg, #fffdfa 0%, #fff 100%);
+      }}
+      .host-meta-title {{
+        margin: 0 0 10px;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #7a7368;
+      }}
+      .host-dl {{
+        margin: 0;
+        display: grid;
+        grid-template-columns: minmax(7.5rem, 9.2rem) 1fr;
+        gap: 6px 12px;
+        font-size: 0.88rem;
+        align-items: baseline;
+      }}
+      .host-dl dt {{
+        margin: 0;
+        color: var(--muted);
+        font-size: 0.82rem;
+      }}
+      .host-dl dd {{
+        margin: 0;
+        line-height: 1.4;
+      }}
+      .host-dl .mono {{
+        font-family: Consolas, "SF Mono", "Courier New", monospace;
+        font-size: 0.84rem;
+      }}
+      .countdown-wrap {{
+        margin-top: 12px;
+        padding-top: 10px;
+        border-top: 1px solid #ede5d8;
+      }}
+      .countdown-line {{
+        font-family: Consolas, "SF Mono", "Courier New", monospace;
+        font-size: 0.88rem;
+        letter-spacing: 0.04em;
+      }}
+      .countdown-line.countdown-late {{
+        color: #a85a28;
+      }}
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
         <div class="titlebar">{html.escape(title_line)}</div>
-        <h1>Bei AhDs Staging Server anmelden</h1>
+        <h1>Anmeldung</h1>
+        <p class="page-sub muted">{html.escape(env_titel)} · API</p>
         <div>
-          <span class="pill ok">Verbunden mit dem Test-Server</span>
-          <span class="pill">Umgebung: {env}</span>
-          <span class="pill">Programm-Version {_API_RELEASE}</span>
-          <span class="pill">Oberfläche {_SERVER_UI_VERSION}</span>
+          <span class="pill ok">Online</span>
+          <span class="pill">{html.escape(env)}</span>
+          <span class="pill">API v{_API_RELEASE}</span>
+          <span class="pill">{_SERVER_UI_VERSION}</span>
         </div>
-        <div class="smalllink muted" id="zeile-auto">
-          Die Infos zum Update vom Heimserver und die Uhr darunter holen sich diese Seite selbst —
-          alle <strong id="txt-refresh-sek">{refresh_sek}</strong> Sekunden. Du musst nichts neu laden.
-          Zuletzt abgefragt: <strong id="txt-stand-zeit">—</strong> (Zeitstempel vom Server)
-        </div>
-        <div class="smalllink muted" id="kasten-updates" style="margin-top:6px;">
-          <strong>Programm vom Heimserver beziehen</strong><br />
-          Letzter Lauf: <span id="hu-ll">{hu_lokal_e}</span> ({tz_label_e}) · <span id="hu-lu">{hu_utc_e}</span> UTC<br />
-          Wie oft nach neuem Stand geschaut wird: <span id="hu-it">{poll_txt_e}</span><br />
-          Nächster geplanter Zeitpunkt: <span id="hu-nl">{nxt_lokal_e}</span> · UTC <span id="hu-nu">{nxt_utc_e}</span><br />
-          Ergebnis der letzten Prüfung: <span id="hu-st">{hu_status}</span> — <span id="hu-dt">{hu_detail}</span><br />
-          Kurzbezeichnung des eingespielten Stands: <code id="hu-sh">{hu_sha_esc}</code><br />
-          <span id="update-countdown" class="muted"></span>
-        </div>
+        <p class="refresh-line muted" id="zeile-auto">
+          <span class="tabular">Intervall <strong id="txt-refresh-sek">{refresh_sek}</strong> s</span>
+          <span class="sep">·</span>
+          <span>Serverzeit <strong id="txt-stand-zeit" class="tabular">—</strong> UTC</span>
+        </p>
+        <section class="host-meta" id="kasten-updates" aria-label="Deployment-Status">
+          <h2 class="host-meta-title">Deployment-Status</h2>
+          <dl class="host-dl">
+            <dt>Letzter Lauf</dt>
+            <dd>
+              <span id="hu-ll" class="mono tabular">{hu_lokal_e}</span>
+              <span class="muted"> ({tz_label_e})</span><br />
+              <span id="hu-lu" class="mono tabular muted">UTC {hu_utc_e}</span>
+            </dd>
+            <dt>Prüfintervall</dt>
+            <dd><span id="hu-it" class="tabular">{poll_txt_e}</span></dd>
+            <dt>Nächste Prüfung</dt>
+            <dd>
+              <span id="hu-nl" class="mono tabular">{nxt_lokal_e}</span><br />
+              <span id="hu-nu" class="mono tabular muted">UTC {nxt_utc_e}</span>
+            </dd>
+            <dt>Ergebnis</dt>
+            <dd><span id="hu-st">{hu_status}</span> · <span id="hu-dt">{hu_detail}</span></dd>
+            <dt>Commit</dt>
+            <dd><code id="hu-sh">{hu_sha_esc}</code></dd>
+          </dl>
+          <div class="countdown-wrap">
+            <span id="update-countdown" class="countdown-line muted tabular" role="status" aria-live="polite" title="Relativ zur geplanten Prüfzeit (Host-Timer)"></span>
+          </div>
+        </section>
 
         <div class="grid">
           <section class="box loginbox">
-            <h2>Login</h2>
+            <h2>Zugang</h2>
             <form id="login-form">
               <label>Benutzer:</label>
               <input id="login-email" name="email" type="text" placeholder="E-Mail / Benutzer" />
               <label>Passwort:</label>
               <input id="login-password" name="password" type="password" placeholder="Passwort" />
-              <div class="smalllink"><a href="#" onclick="alert('Passwort vergessen ist noch nicht aktiv.'); return false;">Passwort vergessen</a> (soll noch nicht funktionieren)</div>
+              <div class="smalllink muted"><a href="#" onclick="alert('Noch nicht implementiert.'); return false;">Passwort vergessen</a></div>
               <button class="btn" type="submit">Anmelden</button>
             </form>
             <div id="login-result" class="smalllink"></div>
-            <div class="smalllink" style="margin-top:10px;">
-              API-Doku: <a href="/docs">/docs</a>
+            <div class="smalllink muted" style="margin-top:10px;">
+              <a href="/docs">OpenAPI · /docs</a>
             </div>
           </section>
           <section class="box">
-            <h2>Statusliste (AhDs)</h2>
-            <div class="status-list">Working Title: AhDs
-Current version: v{_API_RELEASE}
-Version created: {started}
-Invocation date: {invocation}
-Project start date: {_SERVER_PROJECT_START.isoformat()}
-Development time in days: {dev_days}
-Laufzeit-Umgebung: {env}
+            <h2>System</h2>
+            <div class="status-list">AhDs · Arbeitsstand
+Version: v{_API_RELEASE}
+Prozessstart (UTC): {started}
+Seitenaufruf (UTC): {invocation}
+Projektstart: {_SERVER_PROJECT_START.isoformat()}
+Laufzeit: {dev_days} Tage
+Umgebung: {env}
 
-Resolved version (Semantic Versioning):
-MAJOR: {major}
-MINOR: {minor}
-PATCH: {patch}
+SemVer: MAJOR {major} · MINOR {minor} · PATCH {patch}
 
-Counter (start invocations):
-Major: {_SERVER_COUNTER["major"]}
-Minor: {_SERVER_COUNTER["minor"]}
-Patch: {_SERVER_COUNTER["patch"]}
-Total: {_SERVER_COUNTER["total"]}</div>
-            <div class="smalllink" style="margin-top:10px;">
-              Schnellcheck: <a href="/health">/health</a> | <a href="/ready">/ready</a> | <a href="/v1/meta/version">/v1/meta/version</a>
+Aufrufzähler: Mj {_SERVER_COUNTER["major"]} · Mn {_SERVER_COUNTER["minor"]} · P {_SERVER_COUNTER["patch"]} · Σ {_SERVER_COUNTER["total"]}</div>
+            <div class="smalllink muted" style="margin-top:10px;">
+              <a href="/health">/health</a> · <a href="/ready">/ready</a> · <a href="/v1/meta/version">/v1/meta/version</a>
             </div>
           </section>
         </div>
@@ -1010,7 +1078,7 @@ Total: {_SERVER_COUNTER["total"]}</div>
         ev.preventDefault();
         const email = document.getElementById("login-email")?.value || "";
         const password = document.getElementById("login-password")?.value || "";
-        result.textContent = "Anmeldung wird geprüft...";
+        result.textContent = "Wird geprüft …";
         try {{
           const res = await fetch("/v1/auth/login", {{
             method: "POST",
@@ -1022,12 +1090,12 @@ Total: {_SERVER_COUNTER["total"]}</div>
           }});
           const data = await res.json();
           if (!res.ok) {{
-            result.textContent = "Login fehlgeschlagen: " + (data.detail || res.status);
+            result.textContent = "Fehlgeschlagen: " + (data.detail || res.status);
             return;
           }}
-          result.textContent = "Login erfolgreich. Token wurde erstellt.";
+          result.textContent = "OK · Zugriffstoken ausgestellt.";
         }} catch (e) {{
-          result.textContent = "Login fehlgeschlagen: " + String(e);
+          result.textContent = "Fehlgeschlagen: " + String(e);
         }}
       }});
 
@@ -1039,31 +1107,36 @@ Total: {_SERVER_COUNTER["total"]}</div>
           const n = document.getElementById(id);
           if (n) n.textContent = txt;
         }};
+        function fmtDeltaSekunden(absSek) {{
+          const n = Math.max(0, Math.floor(absSek));
+          const h = Math.floor(n / 3600);
+          const m = Math.floor((n % 3600) / 60);
+          const s = n % 60;
+          const p = (x) => String(x).padStart(2, "0");
+          return h > 0 ? `${{h}}:${{p(m)}}:${{p(s)}}` : `${{p(m)}}:${{p(s)}}`;
+        }}
         function countdownSchreiben() {{
           if (!elCd) return;
           const iso = (nextPollIso || "").trim();
           if (!iso) {{
-            elCd.textContent = "Es wurde noch kein Lauf vom Heimserver vermerkt.";
+            elCd.textContent = "Keine Planungsdaten.";
+            elCd.className = "countdown-line muted tabular";
             return;
           }}
           const tNext = Date.parse(iso);
           if (Number.isNaN(tNext)) {{
-            elCd.textContent = "Nächster Zeitpunkt konnte nicht gelesen werden.";
+            elCd.textContent = "—";
+            elCd.className = "countdown-line muted tabular";
             return;
           }}
           const sec = Math.floor((tNext - Date.now()) / 1000);
-          if (sec <= 0) {{
-            elCd.textContent = "Nächster Prüfzeitpunkt ist fällig — der Heimserver holt den neuen Stand in Kürze nach. Diese Zeile gleicht sich von selbst wieder an.";
-            return;
+          if (sec > 0) {{
+            elCd.textContent = "T− " + fmtDeltaSekunden(sec);
+            elCd.className = "countdown-line muted tabular";
+          }} else {{
+            elCd.textContent = "T+ " + fmtDeltaSekunden(-sec);
+            elCd.className = "countdown-line tabular countdown-late";
           }}
-          const h = Math.floor(sec / 3600);
-          const m = Math.floor((sec % 3600) / 60);
-          const s = sec % 60;
-          const teile = [];
-          if (h > 0) teile.push(h + " Std");
-          if (h > 0 || m > 0) teile.push(m + " Min");
-          teile.push(s + " Sek");
-          elCd.textContent = "Countdown bis zur nächsten Prüfung auf neuen Programm-Stand: " + teile.join(" ");
         }}
         async function datenHolen() {{
           try {{
@@ -1071,18 +1144,21 @@ Total: {_SERVER_COUNTER["total"]}</div>
             const j = await res.json();
             const h = j.host_update || {{}};
             nextPollIso = h.next_poll_at || "";
-            setz("txt-stand-zeit", j.serverzeit_utc || "—");
+            const st = j.serverzeit_utc;
+            setz("txt-stand-zeit", st ? String(st).replace(/Z$/, "") : "—");
             setz("hu-ll", h.letzter_lauf_lokal || "—");
-            setz("hu-lu", h.letzter_lauf_utc || "—");
+            const lu = h.letzter_lauf_utc;
+            setz("hu-lu", lu && lu !== "—" ? "UTC " + lu : "—");
             setz("hu-it", h.intervall_text || "—");
             setz("hu-nl", h.naechste_pruefung_lokal || "—");
-            setz("hu-nu", h.naechste_pruefung_utc || "—");
+            const nu = h.naechste_pruefung_utc;
+            setz("hu-nu", nu && nu !== "—" ? "UTC " + nu : "—");
             setz("hu-st", String(h.status ?? "—"));
             setz("hu-dt", String(h.detail ?? "—"));
             setz("hu-sh", String(h.deployed_sha_kurz ?? "—"));
             countdownSchreiben();
           }} catch (e) {{
-            setz("txt-stand-zeit", "Aktualisierung fehlgeschlagen");
+            /* letzte gültige Anzeige beibehalten */
           }}
         }}
         setInterval(countdownSchreiben, 1000);
