@@ -643,7 +643,7 @@ def root() -> HTMLResponse:
         f"Working Title AhDs Staging Server | {env_titel} Build | "
         f"v{_API_RELEASE} | User: Gast | Opened: {invocation}"
     )
-    html = f"""<!doctype html>
+    page_html = f"""<!doctype html>
 <html lang="de">
   <head>
     <meta charset="utf-8" />
@@ -841,7 +841,7 @@ Total: {_SERVER_COUNTER["total"]}</div>
   </body>
 </html>
 """
-    return HTMLResponse(content=html)
+    return HTMLResponse(content=page_html)
 
 
 @app.get("/admin")
