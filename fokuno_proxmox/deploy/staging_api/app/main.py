@@ -13,6 +13,7 @@ from pathlib import Path
 import secrets
 import time
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import psycopg
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response
@@ -22,14 +23,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.3.4")
+app = FastAPI(title="AhDs Staging API", version="0.3.5")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.1.1"
+_SERVER_UI_VERSION = "ui-0.1.2"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
@@ -72,6 +73,76 @@ def _token_secret() -> bytes:
 
 def _utc_now() -> dt.datetime:
     return dt.datetime.now(dt.timezone.utc)
+
+
+_ANZEIGE_TZ_NAME = os.environ.get("AHDS_DISPLAY_TZ", "Europe/Berlin")
+
+
+def _anzeige_zone() -> ZoneInfo:
+    try:
+        return ZoneInfo(_ANZEIGE_TZ_NAME)
+    except Exception:
+        return ZoneInfo("Europe/Berlin")
+
+
+def _iso_nach_utc_zeile(iso: str) -> dt.datetime | None:
+    s = iso.strip()
+    if not s:
+        return None
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        er = dt.datetime.fromisoformat(s)
+    except ValueError:
+        return None
+    if er.tzinfo is None:
+        er = er.replace(tzinfo=dt.timezone.utc)
+    return er.astimezone(dt.timezone.utc)
+
+
+def _host_letzter_lauf_anzeige(checked_iso: str) -> tuple[str, str]:
+    t = _iso_nach_utc_zeile(checked_iso)
+    if t is None:
+        return "—", "—"
+    lokal = t.astimezone(_anzeige_zone()).strftime("%Y-%m-%d %H:%M:%S")
+    utc = t.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    return lokal, utc
+
+
+def _poll_intervall_sekunden(host_update: dict[str, Any]) -> int:
+    try:
+        v = int(host_update.get("poll_interval_seconds") or 0)
+        if v > 0:
+            return v
+    except (TypeError, ValueError):
+        pass
+    try:
+        return max(60, int(os.environ.get("AHDS_UPDATE_POLL_INTERVAL_SECONDS", "900")))
+    except ValueError:
+        return 900
+
+
+def _poll_intervall_text(sek: int) -> str:
+    if sek >= 3600 and sek % 3600 == 0:
+        return f"{sek // 3600} h ({sek} s)"
+    if sek >= 60 and sek % 60 == 0:
+        return f"{sek // 60} min ({sek} s)"
+    return f"{sek} s"
+
+
+def _naechste_poll_iso_zeile(host_update: dict[str, Any]) -> str:
+    roh = host_update.get("next_poll_at")
+    if isinstance(roh, str) and roh.strip():
+        return roh.strip()
+    checked = host_update.get("checked_at")
+    if not isinstance(checked, str) or not checked.strip():
+        return ""
+    t0 = _iso_nach_utc_zeile(str(checked))
+    if t0 is None:
+        return ""
+    inter = _poll_intervall_sekunden(host_update)
+    nxt = t0 + dt.timedelta(seconds=inter)
+    return nxt.strftime("%Y-%m-%dT%H:%M:%S") + "Z"
 
 
 def _admin_email() -> str:
@@ -668,12 +739,28 @@ def root() -> HTMLResponse:
         f"v{_API_RELEASE} | User: Gast | Opened: {invocation}"
     )
     host_update = _update_status_laden()
-    hu_checked = host_update.get("checked_at")
-    hu_checked_str = (
-        str(hu_checked).strip()
-        if isinstance(hu_checked, str) and str(hu_checked).strip()
-        else ""
-    )
+    hu_checked_raw = str(host_update.get("checked_at") or "").strip()
+    hu_lokal, hu_utc = _host_letzter_lauf_anzeige(hu_checked_raw)
+    hu_lokal_e = html.escape(hu_lokal, quote=True)
+    hu_utc_e = html.escape(hu_utc, quote=True)
+    tz_label_e = html.escape(_ANZEIGE_TZ_NAME, quote=True)
+    poll_sec = _poll_intervall_sekunden(host_update)
+    poll_txt_e = html.escape(_poll_intervall_text(poll_sec), quote=True)
+    hu_next_iso = _naechste_poll_iso_zeile(host_update)
+    hu_next_attr = html.escape(hu_next_iso, quote=True)
+    nxt_lokal_e = "—"
+    nxt_utc_e = "—"
+    if hu_next_iso:
+        tn = _iso_nach_utc_zeile(hu_next_iso)
+        if tn is not None:
+            nxt_lokal_e = html.escape(
+                tn.astimezone(_anzeige_zone()).strftime("%Y-%m-%d %H:%M:%S"),
+                quote=True,
+            )
+            nxt_utc_e = html.escape(
+                tn.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+                quote=True,
+            )
     hu_status = html.escape(str(host_update.get("status", "") or "—"), quote=True)
     hu_detail = html.escape(str(host_update.get("detail", "") or "—"), quote=True)
     hu_sha = host_update.get("deployed_sha")
@@ -683,7 +770,6 @@ def root() -> HTMLResponse:
         s_sha = str(hu_sha)
         hu_sha_str = s_sha[:12] + "…" if len(s_sha) > 12 else s_sha
     hu_sha_esc = html.escape(hu_sha_str, quote=True)
-    hu_checked_attr = html.escape(hu_checked_str, quote=True)
     page_html = f"""<!doctype html>
 <html lang="de">
   <head>
@@ -812,10 +898,12 @@ def root() -> HTMLResponse:
         </div>
         <div class="smalllink muted" style="margin-top:4px;">
           <strong>Host-Update (Proxmox, <code>native_update_ct.sh</code>):</strong><br />
-          Letzter Lauf (UTC): {html.escape(hu_checked_str or "—", quote=True)}<br />
+          Letzter Lauf: {hu_lokal_e} ({tz_label_e}) · {hu_utc_e} UTC<br />
+          Geplantes Prüf-Intervall (laut Host): {poll_txt_e}<br />
+          Nächste Prüfung (Zielzeit): {nxt_lokal_e} ({tz_label_e}) · {nxt_utc_e} UTC<br />
           Status: {hu_status} · Detail: {hu_detail}<br />
           Deployment-Commit: <code>{hu_sha_esc}</code><br />
-          <span id="host-update-relative" class="muted" data-checked-at="{hu_checked_attr}"></span>
+          <span id="update-poll-countdown" class="muted" data-next-poll-at="{hu_next_attr}"></span>
         </div>
 
         <div class="grid">
@@ -889,23 +977,23 @@ Total: {_SERVER_COUNTER["total"]}</div>
         }}
       }});
 
-      (function hostUpdateZeit() {{
-        const el = document.getElementById("host-update-relative");
+      (function updatePollCountdown() {{
+        const el = document.getElementById("update-poll-countdown");
         if (!el) return;
-        const iso = (el.getAttribute("data-checked-at") || "").trim();
+        const iso = (el.getAttribute("data-next-poll-at") || "").trim();
         if (!iso) {{
-          el.textContent = "Zeitzähler: Noch kein Host-Updater-Lauf protokolliert (Datei update_status.json fehlt).";
+          el.textContent = "Update-Countdown: Noch kein Host-Lauf protokolliert (update_status.json).";
           return;
         }}
-        const t0 = Date.parse(iso);
-        if (Number.isNaN(t0)) {{
-          el.textContent = "Zeitzähler: Zeitstempel nicht lesbar.";
+        const tNext = Date.parse(iso);
+        if (Number.isNaN(tNext)) {{
+          el.textContent = "Update-Countdown: Zielzeit nicht lesbar.";
           return;
         }}
         function tick() {{
-          const sec = Math.floor((Date.now() - t0) / 1000);
-          if (sec < 0) {{
-            el.textContent = "Zeitzähler: Zeitstempel liegt in der Zukunft.";
+          const sec = Math.floor((tNext - Date.now()) / 1000);
+          if (sec <= 0) {{
+            el.textContent = "Update-Countdown: Zielzeit erreicht — nächster Lauf hängt am systemd-Timer auf dem Host; Seite später neu laden.";
             return;
           }}
           const h = Math.floor(sec / 3600);
@@ -915,7 +1003,7 @@ Total: {_SERVER_COUNTER["total"]}</div>
           if (h > 0) teile.push(h + " h");
           if (h > 0 || m > 0) teile.push(m + " min");
           teile.push(s + " s");
-          el.textContent = "Zeitzähler seit letztem Host-Update-Lauf: " + teile.join(" ");
+          el.textContent = "Update-Countdown — nächste geplante Prüfung in: " + teile.join(" ");
         }}
         tick();
         setInterval(tick, 1000);

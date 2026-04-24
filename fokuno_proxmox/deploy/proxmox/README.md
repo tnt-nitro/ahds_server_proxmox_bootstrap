@@ -68,7 +68,11 @@ chmod +x native_update_ct.sh
 CTID=113 ./native_update_ct.sh
 ```
 
-Die Startseite (`/`) zeigt unter den Status-Pills den **letzten Host-Update-Lauf** (Zeitpunkt in UTC, Ergebnis, Commit-Kurzform) sowie einen **Live-Zähler** („seit letztem Host-Update-Lauf“), der im Browser jede Sekunde aktualisiert wird. Datenquelle ist `/opt/ahds-native/data/update_status.json` im CT (wird von `native_update_ct.sh` geschrieben).
+Die Startseite (`/`) zeigt unter den Status-Pills den **letzten Host-Update-Lauf** (Ortszeit z. B. `Europe/Berlin` plus UTC), das **konfigurierte Prüf-Intervall**, die **nächste geplante Prüfzeit** (`next_poll_at`, aus dem Host-Skript) und einen **Update-Countdown** (Restzeit bis `next_poll_at`). Datenquelle: `/opt/ahds-native/data/update_status.json` im CT (schreibt `native_update_ct.sh`).
+
+- **Ortszeit in der API:** Umgebungsvariable `AHDS_DISPLAY_TZ` (Standard `Europe/Berlin`) im systemd-Service `ahds-staging-api` setzen, falls du eine andere Zone brauchst.
+- **Intervall-Fallback ohne `next_poll_at` in alter JSON:** `AHDS_UPDATE_POLL_INTERVAL_SECONDS` im CT (Standard `900`) — nach dem nächsten Host-Lauf steht `next_poll_at` zuverlässig in der Datei.
+- **Host:** Variable `UPDATE_POLL_INTERVAL_SECONDS` muss zum systemd-Timer passen (z. B. `900` bei `OnUnitActiveSec=15min`); siehe `ahds-native-update.service`.
 
 ### Optional: Host reagiert auf Datei `update_request.json` im CT (Watcher)
 

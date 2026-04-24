@@ -1,5 +1,12 @@
 # API Changelog (Staging API)
 
+## 0.3.5
+
+- Root-Seite: letzter Host-Lauf doppelt angezeigt (Ortszeit per `AHDS_DISPLAY_TZ`, Standard Europe/Berlin, plus UTC) — behebt die zuvor nur-UTC-Verwirrung
+- `update_status.json`: Host schreibt `next_poll_at` und `poll_interval_seconds` (Intervall per `UPDATE_POLL_INTERVAL_SECONDS`, Standard 900)
+- Root-Seite: „Zeitzähler seit …“ durch **Update-Countdown** bis zur nächsten geplanten Prüfung ersetzt
+- systemd: `UPDATE_POLL_INTERVAL_SECONDS=900` in den Update-Units gesetzt
+
 ## 0.3.4
 
 - Hinweis im Code: Patch-Version und dieses Changelog bei sichtbaren API-/Root-UI-Änderungen pflegen

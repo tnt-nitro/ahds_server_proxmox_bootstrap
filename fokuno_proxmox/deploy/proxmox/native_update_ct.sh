@@ -14,6 +14,8 @@ CTID="${CTID:-113}"
 REPO_DIR="${REPO_DIR:-/opt/ahds}"
 BRANCH="${BRANCH:-main}"
 APP_DIR_IN_CT="${APP_DIR_IN_CT:-/opt/ahds-native}"
+# Muss zum systemd-Timer passen (z. B. 15 min = 900), siehe ahds-native-update.service
+UPDATE_POLL_INTERVAL_SECONDS="${UPDATE_POLL_INTERVAL_SECONDS:-900}"
 
 need_cmd() {
   if ! command -v "$1" >/dev/null 2>&1; then
@@ -72,10 +74,14 @@ pct exec "${CTID}" -- curl -fsS http://127.0.0.1:8000/health
 
 echo "Update-Status im CT schreiben..."
 STATUS_FILE="/tmp/ahds-update-status.json"
+CHECKED_AT="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+NEXT_POLL_AT="$(date -u -d "+${UPDATE_POLL_INTERVAL_SECONDS} seconds" +"%Y-%m-%dT%H:%M:%SZ")"
 cat > "${WORK_DIR}/ahds-update-status.json" <<EOF
 {
   "status": "$([ "${LOCAL_SHA}" != "${REMOTE_SHA}" ] && echo "updated" || echo "up_to_date")",
-  "checked_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "checked_at": "${CHECKED_AT}",
+  "next_poll_at": "${NEXT_POLL_AT}",
+  "poll_interval_seconds": ${UPDATE_POLL_INTERVAL_SECONDS},
   "local_before": "${LOCAL_SHA}",
   "remote_target": "${REMOTE_SHA}",
   "deployed_sha": "${DEPLOY_SHA}",

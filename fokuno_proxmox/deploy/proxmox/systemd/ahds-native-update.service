@@ -7,4 +7,5 @@ Wants=network-online.target
 Type=oneshot
 WorkingDirectory=/opt/ahds/fokuno_proxmox/deploy/proxmox
 Environment=CTID=113
+Environment=UPDATE_POLL_INTERVAL_SECONDS=900
 ExecStart=/bin/bash /opt/ahds/fokuno_proxmox/deploy/proxmox/native_update_ct.sh
