@@ -6,6 +6,7 @@ import base64
 import datetime as dt
 import hashlib
 import hmac
+import html
 import json
 import os
 from pathlib import Path
@@ -14,7 +15,7 @@ import time
 from typing import Any
 
 import psycopg
-from fastapi import FastAPI, Header, HTTPException, Request, Response
+from fastapi import FastAPI, Form, Header, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
@@ -28,6 +29,15 @@ _API_COMPAT_POLICY = (
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
 _SERVER_UI_VERSION = "ui-0.1.0"
+_ADMIN_PANEL_USER = "Admin"
+_ADMIN_PANEL_PASSWORD = "x"
+_RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
+_SERVER_PROJECT_START = dt.date(2026, 4, 4)
+_SERVER_STATUS_PATH = Path(
+    os.environ.get("AHDS_SERVER_STATUS_FILE", "/opt/ahds-native/data/server_status.json")
+)
+_SERVER_STARTED_AT = dt.datetime.now(dt.timezone.utc)
+_SERVER_COUNTER: dict[str, int] = {"major": 0, "minor": 0, "patch": 0, "total": 0}
 _DEPRECATED_PATHS: dict[str, dict[str, str]] = {
     "/v1/admin/logs": {
         "sunset": "Wed, 31 Dec 2026 23:59:59 GMT",
@@ -62,6 +72,232 @@ def _utc_now() -> dt.datetime:
 
 def _admin_email() -> str:
     return (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
+
+
+def _admin_panel_auth_pruefen(authorization: str | None) -> None:
+    if not authorization:
+        raise HTTPException(
+            status_code=401,
+            detail="Login erforderlich",
+            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
+        )
+    teile = authorization.split(" ", 1)
+    if len(teile) != 2 or teile[0].lower() != "basic":
+        raise HTTPException(
+            status_code=401,
+            detail="Basic Auth erforderlich",
+            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
+        )
+    try:
+        dec = base64.b64decode(teile[1]).decode("utf-8")
+    except Exception as exc:
+        raise HTTPException(
+            status_code=401,
+            detail="Ungültige Authentifizierung",
+            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
+        ) from exc
+    if ":" not in dec:
+        raise HTTPException(
+            status_code=401,
+            detail="Ungültige Authentifizierung",
+            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
+        )
+    user, pw = dec.split(":", 1)
+    if user != _ADMIN_PANEL_USER or pw != _ADMIN_PANEL_PASSWORD:
+        raise HTTPException(
+            status_code=401,
+            detail="Benutzer oder Passwort falsch",
+            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
+        )
+
+
+def _runtime_env_laden() -> dict[str, str]:
+    daten: dict[str, str] = {}
+    if not _RUNTIME_ENV_PATH.exists():
+        return daten
+    for zeile in _RUNTIME_ENV_PATH.read_text(encoding="utf-8").splitlines():
+        roh = zeile.strip()
+        if not roh or roh.startswith("#") or "=" not in roh:
+            continue
+        k, v = roh.split("=", 1)
+        daten[k.strip()] = v.strip()
+    return daten
+
+
+def _runtime_env_schreiben(daten: dict[str, str]) -> None:
+    keys = [
+        "APP_ENV",
+        "STAGING_DOMAIN",
+        "TLS_EMAIL",
+        "API_TOKEN_SECRET",
+        "ADMIN_EMAIL",
+        "LOGIN_MAX_FEHLVERSUCHE",
+        "LOGIN_SPERRE_SEKUNDEN",
+        "RESET_TOKEN_TTL_SEKUNDEN",
+        "PGHOST",
+        "PGPORT",
+        "PGUSER",
+        "PGPASSWORD",
+        "PGDATABASE",
+        "DUCKDNS_TOKEN",
+    ]
+    ausgabe: list[str] = []
+    for key in keys:
+        if key in daten:
+            ausgabe.append(f"{key}={daten[key]}")
+    _RUNTIME_ENV_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _RUNTIME_ENV_PATH.write_text("\n".join(ausgabe) + "\n", encoding="utf-8")
+
+
+def _semver_aufloesen(version: str) -> tuple[int, int, int]:
+    teile = version.split(".")
+    if len(teile) != 3:
+        return (0, 0, 0)
+    try:
+        return (int(teile[0]), int(teile[1]), int(teile[2]))
+    except ValueError:
+        return (0, 0, 0)
+
+
+def _server_status_laden() -> dict[str, dict[str, int]]:
+    if not _SERVER_STATUS_PATH.exists():
+        return {"by_version": {}}
+    try:
+        daten = json.loads(_SERVER_STATUS_PATH.read_text(encoding="utf-8"))
+        if isinstance(daten, dict):
+            by_version = daten.get("by_version", {})
+            if isinstance(by_version, dict):
+                return {"by_version": {str(k): int(v) for k, v in by_version.items()}}
+    except Exception:
+        pass
+    return {"by_version": {}}
+
+
+def _server_status_schreiben(daten: dict[str, dict[str, int]]) -> None:
+    _SERVER_STATUS_PATH.parent.mkdir(parents=True, exist_ok=True)
+    _SERVER_STATUS_PATH.write_text(
+        json.dumps(daten, ensure_ascii=True, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _server_counter_aktualisieren() -> None:
+    daten = _server_status_laden()
+    by_version = daten.get("by_version", {})
+    version_count = int(by_version.get(_API_RELEASE, 0)) + 1
+    by_version[_API_RELEASE] = version_count
+    daten["by_version"] = by_version
+    _server_status_schreiben(daten)
+
+    major, minor, _patch = _semver_aufloesen(_API_RELEASE)
+    major_count = 0
+    minor_count = 0
+    total_count = 0
+    for version_key, count in by_version.items():
+        count_int = int(count)
+        total_count += count_int
+        v_major, v_minor, _ = _semver_aufloesen(str(version_key))
+        if v_major == major:
+            major_count += count_int
+        if v_major == major and v_minor == minor:
+            minor_count += count_int
+
+    _SERVER_COUNTER["major"] = major_count
+    _SERVER_COUNTER["minor"] = minor_count
+    _SERVER_COUNTER["patch"] = version_count
+    _SERVER_COUNTER["total"] = total_count
+
+
+def _admin_form_html(
+    *,
+    env_daten: dict[str, str],
+    meldung: str = "",
+    fehler: str = "",
+) -> str:
+    def esc(key: str, fallback: str = "") -> str:
+        return html.escape(env_daten.get(key, fallback), quote=True)
+
+    meldung_html = (
+        f'<div class="ok">{html.escape(meldung)}</div>' if meldung else ""
+    )
+    fehler_html = (
+        f'<div class="err">{html.escape(fehler)}</div>' if fehler else ""
+    )
+    return f"""<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AhDs Admin</title>
+  <style>
+    body {{ font-family: "Segoe UI", system-ui, sans-serif; background: #f6f0e6; color: #2f2b24; margin: 0; }}
+    .wrap {{ max-width: 760px; margin: 24px auto; padding: 0 16px; }}
+    .card {{ background: #fffef8; border: 1px solid #e7dcc7; border-radius: 12px; padding: 16px; }}
+    h1 {{ margin: 0 0 8px; font-size: 1.25rem; }}
+    p {{ margin: 4px 0 12px; color: #6f6b64; }}
+    label {{ display: block; margin: 10px 0 4px; font-weight: 600; }}
+    input {{ width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d9ccb5; border-radius: 8px; }}
+    .row {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }}
+    .ok {{ margin: 10px 0; padding: 10px; border-radius: 8px; background: #edf8ef; border: 1px solid #9bcaac; color: #1d6a36; }}
+    .err {{ margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff1f1; border: 1px solid #e2abab; color: #8b2323; }}
+    button {{ margin-top: 14px; background: #9f8a60; color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }}
+    .hint {{ margin-top: 12px; color: #6f6b64; font-size: 0.92rem; }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>AhDs Admin – Serverwerte</h1>
+      <p>Hier kannst du die Installationswerte zentral pflegen. Login aktuell: Admin / x (später absichern).</p>
+      {meldung_html}
+      {fehler_html}
+      <form method="post" action="/admin/save">
+        <div class="row">
+          <div>
+            <label>STAGING_DOMAIN</label>
+            <input name="staging_domain" value="{esc("STAGING_DOMAIN")}" />
+          </div>
+          <div>
+            <label>TLS_EMAIL</label>
+            <input name="tls_email" value="{esc("TLS_EMAIL")}" />
+          </div>
+        </div>
+        <div class="row">
+          <div>
+            <label>ADMIN_EMAIL</label>
+            <input name="admin_email" value="{esc("ADMIN_EMAIL")}" />
+          </div>
+          <div>
+            <label>DUCKDNS_TOKEN (optional)</label>
+            <input name="duckdns_token" value="{esc("DUCKDNS_TOKEN")}" />
+          </div>
+        </div>
+        <label>POSTGRES_PASSWORD (leer = unverändert)</label>
+        <input type="password" name="postgres_password" value="" />
+        <label>API_TOKEN_SECRET (leer = unverändert)</label>
+        <input type="password" name="api_token_secret" value="" />
+        <div class="row">
+          <div>
+            <label>LOGIN_MAX_FEHLVERSUCHE</label>
+            <input name="login_max" value="{esc("LOGIN_MAX_FEHLVERSUCHE", "5")}" />
+          </div>
+          <div>
+            <label>LOGIN_SPERRE_SEKUNDEN</label>
+            <input name="login_lock" value="{esc("LOGIN_SPERRE_SEKUNDEN", "900")}" />
+          </div>
+        </div>
+        <label>RESET_TOKEN_TTL_SEKUNDEN</label>
+        <input name="reset_ttl" value="{esc("RESET_TOKEN_TTL_SEKUNDEN", "1800")}" />
+        <button type="submit">Werte speichern</button>
+      </form>
+      <div class="hint">
+        Hinweis: Änderungen an Secrets/DB-Parametern werden erst nach Service-Neustart wirksam
+        (<code>systemctl restart ahds-staging-api</code>).
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
 
 
 def _conn() -> psycopg.Connection:
@@ -333,6 +569,7 @@ def _audit_log(
 def startup_migrationen() -> None:
     """Stellt sicher, dass Basistabellen vor dem ersten Request existieren."""
     _migrationen_ausfuehren()
+    _server_counter_aktualisieren()
 
 
 @app.middleware("http")
@@ -394,16 +631,24 @@ def ready(response: Response) -> dict[str, Any]:
 def root() -> HTMLResponse:
     env = _app_env()
     env_titel = {
-        "dev": "Developmentserver",
-        "staging": "Testserver",
-        "prod": "Produktivserver",
+        "dev": "AhDs Development Server",
+        "staging": "AhDs Staging Server",
+        "prod": "AhDs Production Server",
     }.get(env, "Server")
+    major, minor, patch = _semver_aufloesen(_API_RELEASE)
+    invocation = _utc_now().strftime("%Y-%m-%d %H:%M:%S")
+    started = _SERVER_STARTED_AT.strftime("%Y-%m-%d %H:%M:%S")
+    dev_days = (dt.date.today() - _SERVER_PROJECT_START).days
+    title_line = (
+        f"Working Title AhDs Staging Server | {env_titel} Build | "
+        f"v{_API_RELEASE} | User: Gast | Opened: {invocation}"
+    )
     html = f"""<!doctype html>
 <html lang="de">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AhDs {env_titel}</title>
+    <title>{html.escape(title_line)}</title>
     <style>
       :root {{
         color-scheme: light;
@@ -421,7 +666,7 @@ def root() -> HTMLResponse:
         font-family: "Segoe UI", system-ui, sans-serif;
       }}
       .wrap {{
-        max-width: 920px;
+        max-width: 980px;
         margin: 28px auto;
         padding: 0 16px;
       }}
@@ -437,6 +682,11 @@ def root() -> HTMLResponse:
         font-size: 1.35rem;
       }}
       .muted {{ color: var(--muted); }}
+      .titlebar {{
+        font-size: 0.9rem;
+        color: #5c584f;
+        margin-bottom: 10px;
+      }}
       .pill {{
         display: inline-block;
         margin: 8px 8px 8px 0;
@@ -451,7 +701,7 @@ def root() -> HTMLResponse:
         margin-top: 14px;
         display: grid;
         gap: 10px;
-        grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+        grid-template-columns: 1.2fr 1fr;
       }}
       .box {{
         border: 1px solid #eadfce;
@@ -462,6 +712,28 @@ def root() -> HTMLResponse:
       .box h2 {{
         font-size: 0.96rem;
         margin: 0 0 8px;
+      }}
+      .loginbox input {{
+        width: 100%;
+        box-sizing: border-box;
+        padding: 8px;
+        border: 1px solid #d9ccb5;
+        border-radius: 8px;
+        margin: 4px 0 10px;
+        background: #fff;
+      }}
+      .btn {{
+        display: inline-block;
+        border: 0;
+        border-radius: 8px;
+        background: #9f8a60;
+        color: #fff;
+        padding: 8px 12px;
+        cursor: pointer;
+      }}
+      .smalllink {{
+        margin: 6px 0 12px;
+        font-size: 0.92rem;
       }}
       a {{ color: var(--accent); text-decoration: none; }}
       a:hover {{ text-decoration: underline; }}
@@ -476,13 +748,18 @@ def root() -> HTMLResponse:
         padding-left: 18px;
       }}
       li {{ margin: 4px 0; }}
+      .status-list {{
+        white-space: pre-line;
+        line-height: 1.45;
+      }}
     </style>
   </head>
   <body>
     <div class="wrap">
       <div class="card">
-        <h1>AhDs {env_titel}</h1>
-        <div class="muted">Browser-Startseite für deinen Serverzugriff im Netzwerk/Internet.</div>
+        <div class="titlebar">{html.escape(title_line)}</div>
+        <h1>Bei AhDs Title Staging Server anmelden</h1>
+        <div class="muted">Browserfähige Serverseite für Netzwerk und Internet.</div>
         <div>
           <span class="pill ok">Server erreichbar</span>
           <span class="pill">APP_ENV: {env}</span>
@@ -491,38 +768,148 @@ def root() -> HTMLResponse:
         </div>
 
         <div class="grid">
-          <section class="box">
-            <h2>Status</h2>
-            <ul>
-              <li><a href="/health">/health</a> (Liveness)</li>
-              <li><a href="/ready">/ready</a> (DB-Readiness)</li>
-              <li><a href="/v1/meta/version">/v1/meta/version</a></li>
-            </ul>
+          <section class="box loginbox">
+            <h2>Login</h2>
+            <form id="login-form">
+              <label>Benutzer:</label>
+              <input id="login-email" name="email" type="text" placeholder="E-Mail / Benutzer" />
+              <label>Passwort:</label>
+              <input id="login-password" name="password" type="password" placeholder="Passwort" />
+              <div class="smalllink"><a href="#" onclick="alert('Passwort vergessen ist noch nicht aktiv.'); return false;">Passwort vergessen</a> (soll noch nicht funktionieren)</div>
+              <button class="btn" type="submit">Anmelden</button>
+            </form>
+            <div id="login-result" class="smalllink"></div>
+            <div class="smalllink" style="margin-top:10px;">
+              API-Doku: <a href="/docs">/docs</a>
+            </div>
           </section>
           <section class="box">
-            <h2>API und Login</h2>
-            <ul>
-              <li><a href="/docs">/docs</a> (interaktive API-Doku)</li>
-              <li><code>POST /v1/auth/login</code></li>
-              <li><code>POST /v1/auth/register</code></li>
-              <li><code>GET /v1/users/me</code> (mit Bearer-Token)</li>
-            </ul>
-          </section>
-          <section class="box">
-            <h2>Hinweis</h2>
-            <div class="muted">
-              Diese Seite bestätigt, dass dein AhDs-Server erreichbar ist.
-              Das eigentliche Benutzer-Login läuft aktuell über die API-Endpunkte
-              und wird später als vollständige Web-Login-Maske ergänzt.
+            <h2>Statusliste (AhDs)</h2>
+            <div class="status-list">Working Title: AhDs
+Current version: v{_API_RELEASE}
+Version created: {started}
+Invocation date: {invocation}
+Project start date: {_SERVER_PROJECT_START.isoformat()}
+Development time in days: {dev_days}
+Laufzeit-Umgebung: {env}
+
+Resolved version (Semantic Versioning):
+MAJOR: {major}
+MINOR: {minor}
+PATCH: {patch}
+
+Counter (start invocations):
+Major: {_SERVER_COUNTER["major"]}
+Minor: {_SERVER_COUNTER["minor"]}
+Patch: {_SERVER_COUNTER["patch"]}
+Total: {_SERVER_COUNTER["total"]}</div>
+            <div class="smalllink" style="margin-top:10px;">
+              Schnellcheck: <a href="/health">/health</a> | <a href="/ready">/ready</a> | <a href="/v1/meta/version">/v1/meta/version</a>
             </div>
           </section>
         </div>
       </div>
     </div>
+    <script>
+      const form = document.getElementById("login-form");
+      const result = document.getElementById("login-result");
+      form?.addEventListener("submit", async (ev) => {{
+        ev.preventDefault();
+        const email = document.getElementById("login-email")?.value || "";
+        const password = document.getElementById("login-password")?.value || "";
+        result.textContent = "Anmeldung wird geprüft...";
+        try {{
+          const res = await fetch("/v1/auth/login", {{
+            method: "POST",
+            headers: {{
+              "content-type": "application/json",
+              "x-client-api-major": "{_API_MAJOR}"
+            }},
+            body: JSON.stringify({{ email, password }})
+          }});
+          const data = await res.json();
+          if (!res.ok) {{
+            result.textContent = "Login fehlgeschlagen: " + (data.detail || res.status);
+            return;
+          }}
+          result.textContent = "Login erfolgreich. Token wurde erstellt.";
+        }} catch (e) {{
+          result.textContent = "Login fehlgeschlagen: " + String(e);
+        }}
+      }});
+    </script>
   </body>
 </html>
 """
     return HTMLResponse(content=html)
+
+
+@app.get("/admin")
+def admin_panel(authorization: str | None = Header(default=None)) -> HTMLResponse:
+    _admin_panel_auth_pruefen(authorization)
+    env_daten = _runtime_env_laden()
+    return HTMLResponse(content=_admin_form_html(env_daten=env_daten))
+
+
+@app.post("/admin/save")
+def admin_panel_save(
+    authorization: str | None = Header(default=None),
+    staging_domain: str = Form(default=""),
+    tls_email: str = Form(default=""),
+    admin_email: str = Form(default=""),
+    duckdns_token: str = Form(default=""),
+    postgres_password: str = Form(default=""),
+    api_token_secret: str = Form(default=""),
+    login_max: str = Form(default="5"),
+    login_lock: str = Form(default="900"),
+    reset_ttl: str = Form(default="1800"),
+) -> HTMLResponse:
+    _admin_panel_auth_pruefen(authorization)
+    env_daten = _runtime_env_laden()
+    try:
+        if not staging_domain.strip():
+            raise ValueError("STAGING_DOMAIN darf nicht leer sein.")
+        if not tls_email.strip():
+            raise ValueError("TLS_EMAIL darf nicht leer sein.")
+        if not admin_email.strip():
+            raise ValueError("ADMIN_EMAIL darf nicht leer sein.")
+        env_daten["STAGING_DOMAIN"] = staging_domain.strip()
+        env_daten["TLS_EMAIL"] = tls_email.strip()
+        env_daten["ADMIN_EMAIL"] = admin_email.strip().lower()
+        env_daten["DUCKDNS_TOKEN"] = duckdns_token.strip()
+        env_daten["LOGIN_MAX_FEHLVERSUCHE"] = str(int(login_max))
+        env_daten["LOGIN_SPERRE_SEKUNDEN"] = str(int(login_lock))
+        env_daten["RESET_TOKEN_TTL_SEKUNDEN"] = str(int(reset_ttl))
+        if postgres_password.strip():
+            env_daten["PGPASSWORD"] = postgres_password.strip()
+        if api_token_secret.strip():
+            env_daten["API_TOKEN_SECRET"] = api_token_secret.strip()
+        if "APP_ENV" not in env_daten:
+            env_daten["APP_ENV"] = _app_env()
+        if "PGHOST" not in env_daten:
+            env_daten["PGHOST"] = os.environ.get("PGHOST", "127.0.0.1")
+        if "PGPORT" not in env_daten:
+            env_daten["PGPORT"] = os.environ.get("PGPORT", "5432")
+        if "PGUSER" not in env_daten:
+            env_daten["PGUSER"] = os.environ.get("PGUSER", "ahds")
+        if "PGDATABASE" not in env_daten:
+            env_daten["PGDATABASE"] = os.environ.get("PGDATABASE", "ahds_staging")
+        _runtime_env_schreiben(env_daten)
+    except Exception as exc:
+        return HTMLResponse(
+            content=_admin_form_html(
+                env_daten=env_daten,
+                fehler=f"Speichern fehlgeschlagen: {exc}",
+            ),
+            status_code=400,
+        )
+
+    return HTMLResponse(
+        content=_admin_form_html(
+            env_daten=env_daten,
+            meldung="Gespeichert. Für volle Wirkung bei Secrets/DB: Service neu starten.",
+        )
+    )
 
 
 @app.get("/v1/meta/version", summary="API-Version und Kompatibilitaet")

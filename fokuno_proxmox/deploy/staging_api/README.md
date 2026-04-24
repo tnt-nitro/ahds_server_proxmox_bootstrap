@@ -29,6 +29,7 @@ docker compose -f staging-compose.yml up -d
 ## Wichtige Endpunkte
 
 - `GET /` – AhDs Browser-Startseite (Server erreichbar + Links)
+- `GET /admin` – Admin-Seite für Runtime-Werte (.env)
 - `GET /health` – Liveness
 - `GET /ready` – DB-Readiness
 - `GET /v1/meta/version`
@@ -45,6 +46,16 @@ docker compose -f staging-compose.yml up -d
 - `GET /v1/admin/users` (nur `admin`)
 - `GET /v1/admin/audit-logs` (nur `admin`)
 - `GET /v1/admin/logs` (deprecated Alias auf Audit-Logs)
+
+## Admin-Seite (temporär)
+
+- Login per HTTP Basic Auth:
+  - User: `Admin`
+  - Passwort: `x`
+- Über `/admin` kannst du Installationswerte nachträglich pflegen
+  (`STAGING_DOMAIN`, `TLS_EMAIL`, `ADMIN_EMAIL`, Limits, optionale Secrets).
+- Hinweis: Nach Änderungen an Secrets/DB-Werten den Service neu starten:
+  `systemctl restart ahds-staging-api`
 
 ## Audit-Logs: Filter + Pagination
 

@@ -32,6 +32,7 @@ class StartZaehlerStand:
     major_starts: int
     minor_starts: int
     patch_starts: int
+    total_starts: int
     starts_je_version: dict[str, int]
 
 
@@ -129,11 +130,13 @@ def startaufruf_zaehlen(version: str) -> StartZaehlerStand:
         patch_starts = version_count
 
     starts_je_version = {str(k): int(v) for k, v in by_version.items()}
+    total_starts = sum(starts_je_version.values())
     return StartZaehlerStand(
         aktuelle_version=version,
         major_starts=major_starts,
         minor_starts=minor_starts,
         patch_starts=patch_starts,
+        total_starts=total_starts,
         starts_je_version=starts_je_version,
     )
 
@@ -185,5 +188,6 @@ def startscreen_english_block(
         "Counter (start invocations):\n"
         f"Major: {semver.major}.x.x -> started {start_counter.major_starts} times\n"
         f"Minor: {semver.major}.{semver.minor}.x -> started {start_counter.minor_starts} times\n"
-        f"Patch: {semver.major}.{semver.minor}.{semver.patch} -> started {start_counter.patch_starts} times"
+        f"Patch: {semver.major}.{semver.minor}.{semver.patch} -> started {start_counter.patch_starts} times\n"
+        f"Total: all versions -> started {start_counter.total_starts} times"
     )
