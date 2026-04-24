@@ -260,6 +260,8 @@ fi
 echo "[5/9] Env-Datei für Service..."
 cat > "${ENV_FILE}" <<EOF
 APP_ENV=${APP_ENV}
+STAGING_DOMAIN=${STAGING_DOMAIN}
+TLS_EMAIL=${TLS_EMAIL}
 API_TOKEN_SECRET=${API_TOKEN_SECRET}
 ADMIN_EMAIL=${ADMIN_EMAIL}
 LOGIN_MAX_FEHLVERSUCHE=5
@@ -333,10 +335,18 @@ EOF
 
 ln -sf "/etc/nginx/sites-available/${NGINX_SITE}" "/etc/nginx/sites-enabled/${NGINX_SITE}"
 rm -f /etc/nginx/sites-enabled/default
-nginx -t
+nginx -t 2>&1 | sed -n '1,5p'
 systemctl reload nginx
 
-echo "[9/9] TLS via Certbot (Webroot)..."
+echo "[8c] Vorab: NGINX → API (Port 80, Host-Header ${STAGING_DOMAIN})..."
+PREF_CODE="$(curl -sS -o /dev/null -w "%{http_code}" --connect-timeout 3 --max-time 10 \
+  -H "Host: ${STAGING_DOMAIN}" "http://127.0.0.1/health" || echo "000")"
+if [[ "${PREF_CODE}" != "200" ]]; then
+  echo "Hinweis: HTTP-Code für http://127.0.0.1/health war ${PREF_CODE} (erwartet 200). Certbot könnte scheitern." >&2
+  journalctl -u nginx -n 12 --no-pager 2>/dev/null || true
+fi
+
+echo "[9/9] TLS via Certbot (Webroot, --quiet — bei Fehler kurzer Log-Auszug)..."
 set +e
 certbot certonly \
   --webroot -w "${ACME_WEBROOT}" \
@@ -344,7 +354,8 @@ certbot certonly \
   -m "${TLS_EMAIL}" \
   --agree-tos \
   --non-interactive \
-  --keep-until-expiring
+  --keep-until-expiring \
+  --quiet
 CERTBOT_RC=$?
 set -e
 if [[ "${CERTBOT_RC}" -ne 0 ]]; then
@@ -355,7 +366,8 @@ if [[ "${CERTBOT_RC}" -ne 0 ]]; then
   echo "  - Kein anderer Dienst darf Port 80 belegen oder eine andere Antwort liefern als dieses NGINX." >&2
   echo "Prüfen (lokal, mit Host-Header):" >&2
   echo "  curl -sI -H 'Host: ${STAGING_DOMAIN}' http://127.0.0.1/.well-known/acme-challenge/test || true" >&2
-  echo "Log: /var/log/letsencrypt/letsencrypt.log" >&2
+  echo "Letzte Zeilen aus letsencrypt.log:" >&2
+  tail -n 35 /var/log/letsencrypt/letsencrypt.log 2>/dev/null || echo "  (Log nicht lesbar)" >&2
   exit "${CERTBOT_RC}"
 fi
 
@@ -411,7 +423,7 @@ server {
 }
 EOF
 
-nginx -t
+nginx -t 2>&1 | sed -n '1,5p'
 systemctl reload nginx
 
 if [[ -n "${DUCKDNS_TOKEN:-}" ]]; then

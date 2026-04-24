@@ -134,8 +134,19 @@ Das Skript richtet automatisch ein:
 - PostgreSQL lokal
 - FastAPI als systemd-Service (`ahds-staging-api.service`)
 - NGINX Reverse Proxy
-- TLS mit Certbot
+- TLS mit Certbot (**`--quiet`**, bei Fehler nur ein **kurzer Auszug** aus `letsencrypt.log`)
 - optional DuckDNS-Cron (wenn Token eingegeben wird)
+- **`STAGING_DOMAIN`** und **`TLS_EMAIL`** in `/opt/ahds-native/.env` (damit die Startseite NET/WEB sinnvoll prüfen kann)
+
+**NGINX kurz selbst testen** (nach Installation oder bei Problemen):
+
+```bash
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
+chmod +x nginx_staging_preflight.sh
+./nginx_staging_preflight.sh
+```
+
+Details und Nachziehen der `.env` bei alten CTs: [`OPERATIONS_RUNBOOK.md`](./OPERATIONS_RUNBOOK.md) Abschnitt **7**.
 
 Wichtig:
 

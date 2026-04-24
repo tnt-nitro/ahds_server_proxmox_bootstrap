@@ -120,3 +120,32 @@ Wenn ein Update fehlschlägt:
   - CI/Release grün
   - `./healthcheck_proxmox.sh` erfolgreich
   - aktuelles Backup vorhanden
+
+## 7) NGINX + TLS nativ (LXC ohne Docker)
+
+### Domain in der API-`.env` (wichtig für „Server NET/WEB“ auf der Startseite)
+
+Der Installer schreibt `STAGING_DOMAIN` und `TLS_EMAIL` nach `/opt/ahds-native/.env`. Fehlen die Zeilen bei einer älteren Installation:
+
+```bash
+grep -q '^STAGING_DOMAIN=' /opt/ahds-native/.env || echo "STAGING_DOMAIN=DEINE_DOMAIN" >> /opt/ahds-native/.env
+grep -q '^TLS_EMAIL=' /opt/ahds-native/.env || echo "TLS_EMAIL=DEINE_MAIL" >> /opt/ahds-native/.env
+systemctl restart ahds-staging-api
+```
+
+### Kurz prüfen (wenig Konsolen-Spam)
+
+Im Repo-Ordner auf dem System (oder Pfad anpassen):
+
+```bash
+chmod +x ./nginx_staging_preflight.sh
+./nginx_staging_preflight.sh
+```
+
+### NGINX / Zertifikat neu laden
+
+```bash
+nginx -t && systemctl reload nginx
+```
+
+Certbot-Details nur bei Bedarf: `tail -n 50 /var/log/letsencrypt/letsencrypt.log`
