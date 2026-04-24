@@ -47,14 +47,15 @@ docker compose -f staging-compose.yml up -d
 - `GET /v1/admin/audit-logs` (nur `admin`)
 - `GET /v1/admin/logs` (deprecated Alias auf Audit-Logs)
 
-## Erreichbarkeit NET/WEB (Startseite `/`)
+## Erreichbarkeit NET/WEB/API (Startseite `/`)
 
 Im Hintergrund prüft die API regelmäßig (Standard alle **120** Sekunden, Minimum **30**):
 
-- **Server NET**: HTTPS `GET /health` zu **127.0.0.1:443** mit TLS-SNI `STAGING_DOMAIN` (läuft über NGINX auf derselben Maschine).
-- **Server WEB**: HTTPS `GET /health` zu **`STAGING_DOMAIN`** per normalem DNS/TLS (wie ein Client von außen; ohne NAT-Hairpin kann WEB rot bleiben, obwohl NET grün ist).
+- **Server NET (NGINX :443)**: HTTPS `GET /health` zu **127.0.0.1:443** mit TLS-SNI `STAGING_DOMAIN` (nur der Weg über **NGINX**). Wenn du die Seite im Browser mit **:8000** (oder anderem Uvicorn-Port) öffnest, umgehst du NGINX — dann kann NET rot sein, obwohl du Inhalte siehst.
+- **Server WEB (DNS+HTTPS)**: HTTPS `GET /health` zu **`STAGING_DOMAIN`** per normalem DNS/TLS (wie von außen; ohne NAT-Hairpin oft rot).
+- **Server API (:Port)**: HTTP `GET /health` direkt auf **127.0.0.1** (Standard **8000**, Umgebung **`AHDS_API_HEALTH_PORT`** oder **`PORT`**).
 
-Steuerung: Umgebungsvariable **`AHDS_REACHABILITY_INTERVAL_SEC`** (z. B. in der systemd-Unit oder `.env`).
+Steuerung: **`AHDS_REACHABILITY_INTERVAL_SEC`** (Intervall), optional **`AHDS_API_HEALTH_PORT`**.
 
 ## Admin-Seite (temporär)
 

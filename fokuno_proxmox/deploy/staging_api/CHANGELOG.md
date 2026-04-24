@@ -1,5 +1,10 @@
 # API Changelog (Staging API)
 
+## 0.3.7
+
+- Erreichbarkeit: dritte Anzeige **Server API (:Port)** für direkten `/health`-Aufruf (Standard 8000, steuerbar mit `AHDS_API_HEALTH_PORT` / `PORT`)
+- Pills umbenannt zu **Server NET (NGINX :443)** und **Server WEB (DNS+HTTPS)**; Hinweistext erklärt, warum NET rot sein kann, obwohl die Seite über :8000 lädt
+
 ## 0.3.6
 
 - Root-Seite: automatische Erreichbarkeitsprüfung **Server NET** (HTTPS `/health` über NGINX, Loopback 127.0.0.1 mit SNI) und **Server WEB** (gleicher Hostname per DNS/TLS wie von außen)

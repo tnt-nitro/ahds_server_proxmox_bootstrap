@@ -27,14 +27,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.3.6")
+app = FastAPI(title="AhDs Staging API", version="0.3.7")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.1.3"
+_SERVER_UI_VERSION = "ui-0.1.4"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
@@ -52,8 +52,10 @@ _REACHABILITY_LOCK = threading.Lock()
 _REACHABILITY: dict[str, Any] = {
     "net_ok": None,
     "web_ok": None,
+    "api_direct_ok": None,
     "net_detail": "",
     "web_detail": "",
+    "api_direct_detail": "",
     "checked_at": "",
 }
 _REACHABILITY_TASK: asyncio.Task[Any] | None = None
@@ -329,6 +331,36 @@ def _reachability_schreiben(**kwargs: Any) -> None:
         _REACHABILITY.update(kwargs)
 
 
+def _api_health_port() -> int:
+    for key in ("AHDS_API_HEALTH_PORT", "PORT"):
+        v = (os.environ.get(key) or "").strip()
+        if v.isdigit():
+            return max(1, min(65535, int(v)))
+    return 8000
+
+
+def _http_health_api_direkt() -> tuple[bool, str]:
+    """Uvicorn/FastAPI ohne NGINX (typisch Port 8000)."""
+    port = _api_health_port()
+    try:
+        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5.0)
+        conn.request("GET", "/health")
+        res = conn.getresponse()
+        raw = res.read(4000)
+        conn.close()
+        if res.status != 200:
+            return False, f"HTTP {res.status} (Port {port})"
+        try:
+            data = json.loads(raw.decode("utf-8"))
+        except Exception:
+            return False, f"Kein JSON (Port {port})"
+        if data.get("status") == "ok":
+            return True, f"HTTP /health direkt auf Port {port}"
+        return False, f"JSON-Status {data.get('status')!r} (Port {port})"
+    except Exception as exc:
+        return False, str(exc)[:200]
+
+
 def _https_health_net(staging_domain: str) -> tuple[bool, str]:
     """NGINX+TLS lokal: 127.0.0.1:443 mit SNI wie der öffentliche Hostname."""
     if not staging_domain:
@@ -391,12 +423,15 @@ def _https_health_web(staging_domain: str) -> tuple[bool, str]:
 def _reachability_einmal_pruefen() -> None:
     domain = _staging_domain_oeffentlich()
     zeit = _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
+    api_ok, api_de = _http_health_api_direkt()
     if not domain:
         _reachability_schreiben(
             net_ok=False,
             web_ok=False,
+            api_direct_ok=api_ok,
             net_detail="STAGING_DOMAIN fehlt",
             web_detail="STAGING_DOMAIN fehlt",
+            api_direct_detail=api_de,
             checked_at=zeit,
         )
         return
@@ -405,8 +440,10 @@ def _reachability_einmal_pruefen() -> None:
     _reachability_schreiben(
         net_ok=net_ok,
         web_ok=web_ok,
+        api_direct_ok=api_ok,
         net_detail=net_de,
         web_detail=web_de,
+        api_direct_detail=api_de,
         checked_at=zeit,
     )
 
@@ -423,11 +460,14 @@ async def _reachability_schleife() -> None:
         except Exception as exc:
             zeit = _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
             msg = f"Prüffehler: {exc}"[:220]
+            api_ok, api_de = _http_health_api_direkt()
             _reachability_schreiben(
                 net_ok=False,
                 web_ok=False,
+                api_direct_ok=api_ok,
                 net_detail=msg,
                 web_detail=msg,
+                api_direct_detail=api_de,
                 checked_at=zeit,
             )
         await asyncio.sleep(inter)
@@ -944,15 +984,22 @@ def root() -> HTMLResponse:
         txt = html.escape(kurz_txt, quote=True)
         return f'<span class="pill {cls}" title="{titel}">{txt}</span>'
 
+    api_port_disp = _api_health_port()
+    api_port_e = html.escape(str(api_port_disp), quote=True)
     pill_net = _pill_erreichbarkeit(
         rch.get("net_ok"),
-        "Server NET",
+        "Server NET (NGINX :443)",
         str(rch.get("net_detail") or ""),
     )
     pill_web = _pill_erreichbarkeit(
         rch.get("web_ok"),
-        "Server WEB",
+        "Server WEB (DNS+HTTPS)",
         str(rch.get("web_detail") or ""),
+    )
+    pill_api = _pill_erreichbarkeit(
+        rch.get("api_direct_ok"),
+        f"Server API (:{api_port_disp})",
+        str(rch.get("api_direct_detail") or ""),
     )
     page_html = f"""<!doctype html>
 <html lang="de">
@@ -1078,13 +1125,18 @@ def root() -> HTMLResponse:
         <div>
           {pill_net}
           {pill_web}
+          {pill_api}
           <span class="pill">APP_ENV: {env}</span>
           <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
           <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
         </div>
         <div class="smalllink muted">
-          Erreichbarkeit: NET = NGINX+TLS auf diesem Rechner (Loopback), WEB = gleicher Hostname per DNS von hier aus.
-          Letzte Prüfung: {rch_checked_e} UTC · Intervall ca. {rch_inter_e} s (Umgebung <code>AHDS_REACHABILITY_INTERVAL_SEC</code>).
+          <strong>Erreichbarkeit:</strong>
+          <strong>Server NET</strong> prüft nur <strong>NGINX mit TLS auf Port 443</strong> (Loopback mit deinem Hostnamen).
+          Wenn deine URL <code>:{api_port_e}</code> enthält (direkt Uvicorn/FastAPI), läuft der Weg <strong>ohne NGINX</strong> — dann ist meist
+          <strong>Server API</strong> grün, <strong>Server NET</strong> kann trotzdem rot sein (NGINX wird umgangen).
+          <strong>Server WEB</strong> = gleicher Hostname per DNS/TLS wie von außen (ohne NAT-Hairpin oft rot).<br />
+          Letzte Prüfung: {rch_checked_e} UTC · Intervall ca. {rch_inter_e} s (<code>AHDS_REACHABILITY_INTERVAL_SEC</code>).
         </div>
         <div class="smalllink muted" style="margin-top:4px;">
           <strong>Host-Update (Proxmox, <code>native_update_ct.sh</code>):</strong><br />
