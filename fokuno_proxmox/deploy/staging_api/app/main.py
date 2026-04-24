@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
-app = FastAPI(title="AhDs Staging API", version="0.3.0")
+app = FastAPI(title="AhDs Staging API", version="0.3.1")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
@@ -635,12 +635,17 @@ def root() -> HTMLResponse:
         "staging": "AhDs Staging Server",
         "prod": "AhDs Production Server",
     }.get(env, "Server")
+    env_build = {
+        "dev": "Development Build",
+        "staging": "Staging Build",
+        "prod": "Production Build",
+    }.get(env, "Unknown Build")
     major, minor, patch = _semver_aufloesen(_API_RELEASE)
     invocation = _utc_now().strftime("%Y-%m-%d %H:%M:%S")
     started = _SERVER_STARTED_AT.strftime("%Y-%m-%d %H:%M:%S")
     dev_days = (dt.date.today() - _SERVER_PROJECT_START).days
     title_line = (
-        f"Working Title AhDs Staging Server | {env_titel} Build | "
+        f"Working Title AhDs Staging Server | {env_build} | "
         f"v{_API_RELEASE} | User: Gast | Opened: {invocation}"
     )
     page_html = f"""<!doctype html>
@@ -758,8 +763,7 @@ def root() -> HTMLResponse:
     <div class="wrap">
       <div class="card">
         <div class="titlebar">{html.escape(title_line)}</div>
-        <h1>Bei AhDs Title Staging Server anmelden</h1>
-        <div class="muted">Browserfähige Serverseite für Netzwerk und Internet.</div>
+        <h1>Bei AhDs Staging Server anmelden</h1>
         <div>
           <span class="pill ok">Server erreichbar</span>
           <span class="pill">APP_ENV: {env}</span>

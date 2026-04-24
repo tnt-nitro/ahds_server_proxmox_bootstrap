@@ -1,5 +1,12 @@
 # API Changelog (Staging API)
 
+## 0.3.1
+
+- Root-Seite sprachlich bereinigt (kein „Title“ mehr in der Überschrift)
+- Server-Build-Anzeige auf bekannte Build-Bezeichnungen vereinheitlicht
+  (`Development Build`, `Staging Build`, `Production Build`)
+- Unnötige Unterzeile auf der Root-Seite entfernt
+
 ## 0.3.0
 
 - Auth-Basis mit Access/Refresh-Token, Logout/Refresh
