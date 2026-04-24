@@ -21,14 +21,15 @@ from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
-app = FastAPI(title="AhDs Staging API", version="0.3.3")
+# Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
+app = FastAPI(title="AhDs Staging API", version="0.3.4")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.1.0"
+_SERVER_UI_VERSION = "ui-0.1.1"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))

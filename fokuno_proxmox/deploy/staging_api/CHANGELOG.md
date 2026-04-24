@@ -1,5 +1,10 @@
 # API Changelog (Staging API)
 
+## 0.3.4
+
+- Hinweis im Code: Patch-Version und dieses Changelog bei sichtbaren API-/Root-UI-Änderungen pflegen
+- `_SERVER_UI_VERSION` auf `ui-0.1.1`
+
 ## 0.3.3
 
 - Root-Seite: Buttons „Aktualisieren“, „Update prüfen“, „Update installieren“ entfernt
