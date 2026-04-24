@@ -36,6 +36,12 @@ _SERVER_PROJECT_START = dt.date(2026, 4, 4)
 _SERVER_STATUS_PATH = Path(
     os.environ.get("AHDS_SERVER_STATUS_FILE", "/opt/ahds-native/data/server_status.json")
 )
+_UPDATE_STATUS_PATH = Path(
+    os.environ.get("AHDS_UPDATE_STATUS_FILE", "/opt/ahds-native/data/update_status.json")
+)
+_UPDATE_REQUEST_PATH = Path(
+    os.environ.get("AHDS_UPDATE_REQUEST_FILE", "/opt/ahds-native/data/update_request.json")
+)
 _SERVER_STARTED_AT = dt.datetime.now(dt.timezone.utc)
 _SERVER_COUNTER: dict[str, int] = {"major": 0, "minor": 0, "patch": 0, "total": 0}
 _DEPRECATED_PATHS: dict[str, dict[str, str]] = {
@@ -206,6 +212,34 @@ def _server_counter_aktualisieren() -> None:
     _SERVER_COUNTER["minor"] = minor_count
     _SERVER_COUNTER["patch"] = version_count
     _SERVER_COUNTER["total"] = total_count
+
+
+def _update_status_laden() -> dict[str, Any]:
+    if not _UPDATE_STATUS_PATH.exists():
+        return {
+            "status": "unknown",
+            "detail": "Noch kein Updater-Lauf protokolliert.",
+        }
+    try:
+        daten = json.loads(_UPDATE_STATUS_PATH.read_text(encoding="utf-8"))
+        if isinstance(daten, dict):
+            return daten
+    except Exception:
+        pass
+    return {"status": "error", "detail": "Update-Statusdatei ist ungültig."}
+
+
+def _update_request_schreiben() -> None:
+    _UPDATE_REQUEST_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "requested_at": _utc_now().isoformat(),
+        "source": "browser",
+        "note": "Update manuell angefordert",
+    }
+    _UPDATE_REQUEST_PATH.write_text(
+        json.dumps(payload, ensure_ascii=True, indent=2),
+        encoding="utf-8",
+    )
 
 
 def _admin_form_html(
@@ -740,6 +774,9 @@ def root() -> HTMLResponse:
         background: #6f6b64;
         margin-left: 8px;
       }}
+      .btn.update {{
+        background: #3f6e9d;
+      }}
       .smalllink {{
         margin: 6px 0 12px;
         font-size: 0.92rem;
@@ -774,7 +811,10 @@ def root() -> HTMLResponse:
           <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
           <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
           <button class="btn secondary" type="button" onclick="window.location.reload();">Aktualisieren</button>
+          <button class="btn update" type="button" id="btn-update-check">Update prüfen</button>
+          <button class="btn update" type="button" id="btn-update-install">Update installieren</button>
         </div>
+        <div id="update-result" class="smalllink"></div>
 
         <div class="grid">
           <section class="box loginbox">
@@ -844,6 +884,39 @@ Total: {_SERVER_COUNTER["total"]}</div>
           result.textContent = "Login erfolgreich. Token wurde erstellt.";
         }} catch (e) {{
           result.textContent = "Login fehlgeschlagen: " + String(e);
+        }}
+      }});
+
+      const updateResult = document.getElementById("update-result");
+      const btnCheck = document.getElementById("btn-update-check");
+      const btnInstall = document.getElementById("btn-update-install");
+
+      btnCheck?.addEventListener("click", async () => {{
+        updateResult.textContent = "Prüfe Update-Status ...";
+        try {{
+          const res = await fetch("/update/status");
+          const data = await res.json();
+          updateResult.textContent =
+            "Update-Status: " + (data.status || "unknown") +
+            " | Letzte Prüfung: " + (data.checked_at || "-") +
+            " | Detail: " + (data.detail || "-");
+        }} catch (e) {{
+          updateResult.textContent = "Update-Prüfung fehlgeschlagen: " + String(e);
+        }}
+      }});
+
+      btnInstall?.addEventListener("click", async () => {{
+        updateResult.textContent = "Update-Anforderung wird gespeichert ...";
+        try {{
+          const res = await fetch("/update/request", {{ method: "POST" }});
+          const data = await res.json();
+          if (!res.ok) {{
+            updateResult.textContent = "Update-Anforderung fehlgeschlagen: " + (data.detail || res.status);
+            return;
+          }}
+          updateResult.textContent = data.detail || "Update angefordert.";
+        }} catch (e) {{
+          updateResult.textContent = "Update-Anforderung fehlgeschlagen: " + String(e);
         }}
       }});
     </script>
@@ -919,6 +992,20 @@ def admin_panel_save(
             meldung="Gespeichert. Für volle Wirkung bei Secrets/DB: Service neu starten.",
         )
     )
+
+
+@app.get("/update/status")
+def update_status() -> dict[str, Any]:
+    return _update_status_laden()
+
+
+@app.post("/update/request")
+def update_request() -> dict[str, str]:
+    _update_request_schreiben()
+    return {
+        "status": "ok",
+        "detail": "Update wurde angefordert. Der Proxmox-Updater spielt es beim nächsten Lauf ein.",
+    }
 
 
 @app.get("/v1/meta/version", summary="API-Version und Kompatibilitaet")

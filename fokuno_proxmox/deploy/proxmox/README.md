@@ -68,6 +68,12 @@ chmod +x native_update_ct.sh
 CTID=113 ./native_update_ct.sh
 ```
 
+Die Browser-Seite (`/`) bietet zusätzlich:
+
+- **Update prüfen**: zeigt den letzten Updater-Status an
+- **Update installieren**: schreibt eine Update-Anforderung in den CT;
+  beim nächsten Timer-Lauf wird diese abgearbeitet
+
 ### Auto-Update per systemd-Timer (alle 15 Minuten)
 
 ```bash

@@ -52,6 +52,7 @@ if [[ "${LOCAL_SHA}" != "${REMOTE_SHA}" ]]; then
 else
   echo "Kein neues Git-Update gefunden."
 fi
+DEPLOY_SHA="$(git -C "${REPO_DIR}" rev-parse HEAD)"
 
 echo "[3/6] API in CT kopieren..."
 WORK_DIR="$(mktemp -d)"
@@ -68,5 +69,23 @@ pct exec "${CTID}" -- systemctl restart ahds-staging-api
 
 echo "[6/6] Healthcheck..."
 pct exec "${CTID}" -- curl -fsS http://127.0.0.1:8000/health
+
+echo "Update-Status im CT schreiben..."
+STATUS_FILE="/tmp/ahds-update-status.json"
+cat > "${WORK_DIR}/ahds-update-status.json" <<EOF
+{
+  "status": "$([ "${LOCAL_SHA}" != "${REMOTE_SHA}" ] && echo "updated" || echo "up_to_date")",
+  "checked_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "local_before": "${LOCAL_SHA}",
+  "remote_target": "${REMOTE_SHA}",
+  "deployed_sha": "${DEPLOY_SHA}",
+  "detail": "$([ "${LOCAL_SHA}" != "${REMOTE_SHA}" ] && echo "Neues Update eingespielt." || echo "Kein neues Update vorhanden.")"
+}
+EOF
+pct push "${CTID}" "${WORK_DIR}/ahds-update-status.json" "${STATUS_FILE}"
+pct exec "${CTID}" -- bash -lc "mkdir -p /opt/ahds-native/data && mv ${STATUS_FILE} /opt/ahds-native/data/update_status.json"
+
+# Falls eine Browser-Update-Anforderung vorlag, als erledigt markieren.
+pct exec "${CTID}" -- bash -lc "rm -f /opt/ahds-native/data/update_request.json" || true
 echo
 echo "Update erfolgreich für CT ${CTID}."
