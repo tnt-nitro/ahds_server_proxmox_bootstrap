@@ -28,7 +28,8 @@ docker compose -f staging-compose.yml up -d
 
 ## Wichtige Endpunkte
 
-- `GET /` – AhDs Browser-Startseite (u. a. **Server NET** / **Server WEB** Erreichbarkeit, Host-Update-Infos, Login)
+- `GET /` – AhDs Browser-Startseite (Host-Update-Infos mit Auto-Aktualisierung, Login)
+- `GET /status/aktuell` – JSON für die Startseite (Serverzeit, Host-Update aus `update_status.json`)
 - `GET /admin` – Admin-Seite für Runtime-Werte (.env)
 - `GET /health` – Liveness
 - `GET /ready` – DB-Readiness
@@ -47,15 +48,11 @@ docker compose -f staging-compose.yml up -d
 - `GET /v1/admin/audit-logs` (nur `admin`)
 - `GET /v1/admin/logs` (deprecated Alias auf Audit-Logs)
 
-## Erreichbarkeit NET/WEB/API (Startseite `/`)
+## Startseite: Auto-Aktualisierung (`/`)
 
-Im Hintergrund prüft die API regelmäßig (Standard alle **120** Sekunden, Minimum **30**):
+Die HTML-Startseite lädt Host-Update-Daten und den Countdown per `fetch` von **`GET /status/aktuell`** nach, ohne dass du die Seite neu laden musst.
 
-- **Server NET (NGINX :443)**: HTTPS `GET /health` zu **127.0.0.1:443** mit TLS-SNI `STAGING_DOMAIN` (nur der Weg über **NGINX**). Wenn du die Seite im Browser mit **:8000** (oder anderem Uvicorn-Port) öffnest, umgehst du NGINX — dann kann NET rot sein, obwohl du Inhalte siehst.
-- **Server WEB (DNS+HTTPS)**: HTTPS `GET /health` zu **`STAGING_DOMAIN`** per normalem DNS/TLS (wie von außen; ohne NAT-Hairpin oft rot).
-- **Server API (:Port)**: HTTP `GET /health` direkt auf **127.0.0.1** (Standard **8000**, Umgebung **`AHDS_API_HEALTH_PORT`** oder **`PORT`**).
-
-Steuerung: **`AHDS_REACHABILITY_INTERVAL_SEC`** (Intervall), optional **`AHDS_API_HEALTH_PORT`**.
+- **`AHDS_STARTSEITE_AKTUALISIERUNG_MS`**: Abstand zwischen den Abrufen im Browser (Standard **30000**, Minimum **10000**). Setzen im systemd-Service `ahds-staging-api` (Umgebungsvariablen der Unit), danach Dienst neu starten.
 
 ## Admin-Seite (temporär)
 

@@ -1,5 +1,12 @@
 # API Changelog (Staging API)
 
+## 0.4.0
+
+- Startseite (`/`): Erreichbarkeits-Hintergrundprüfungen und NET/WEB/API-Pills entfernt; klarere, alltagstaugliche Texte
+- Neu: `GET /status/aktuell` — JSON für Host-Update-Felder und Serverzeit (für die Startseite)
+- Startseite aktualisiert Countdown und Host-Update-Infos per JavaScript (`fetch`), ohne manuelles Neuladen; Intervall über `AHDS_STARTSEITE_AKTUALISIERUNG_MS` (Standard 30 000 ms, Minimum 10 000 ms)
+- `_SERVER_UI_VERSION` auf `ui-0.2.0`
+
 ## 0.3.8
 
 - Anzeige-Fallback für Host-Update-Intervall (ohne `poll_interval_seconds` in alter JSON): Standard **300 s** (5 min), Umgebung `AHDS_UPDATE_POLL_INTERVAL_SECONDS`

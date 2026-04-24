@@ -68,13 +68,11 @@ chmod +x native_update_ct.sh
 CTID=113 ./native_update_ct.sh
 ```
 
-Die Startseite (`/`) zeigt unter den Status-Pills den **letzten Host-Update-Lauf** (Ortszeit z. B. `Europe/Berlin` plus UTC), das **konfigurierte Prüf-Intervall**, die **nächste geplante Prüfzeit** (`next_poll_at`, aus dem Host-Skript) und einen **Update-Countdown** (Restzeit bis `next_poll_at`). Datenquelle: `/opt/ahds-native/data/update_status.json` im CT (schreibt `native_update_ct.sh`).
+Die Startseite (`/`) zeigt den **letzten Host-Update-Lauf** (Ortszeit z. B. `Europe/Berlin` plus UTC), das **konfigurierte Prüf-Intervall**, die **nächste geplante Prüfzeit** (`next_poll_at`, aus dem Host-Skript) und einen **Update-Countdown** (Restzeit bis `next_poll_at`). Diese Angaben aktualisieren sich im Browser von selbst (siehe `AHDS_STARTSEITE_AKTUALISIERUNG_MS` in `fokuno_proxmox/deploy/staging_api/README.md`). Datenquelle: `/opt/ahds-native/data/update_status.json` im CT (schreibt `native_update_ct.sh`).
 
 - **Ortszeit in der API:** Umgebungsvariable `AHDS_DISPLAY_TZ` (Standard `Europe/Berlin`) im systemd-Service `ahds-staging-api` setzen, falls du eine andere Zone brauchst.
 - **Intervall-Fallback ohne `next_poll_at` in alter JSON:** `AHDS_UPDATE_POLL_INTERVAL_SECONDS` im CT (Standard `300`) — nach dem nächsten Host-Lauf steht `next_poll_at` zuverlässig in der Datei.
 - **Host:** Variable `UPDATE_POLL_INTERVAL_SECONDS` muss zum systemd-Timer passen (z. B. `300` bei `OnUnitActiveSec=5min`); siehe `ahds-native-update.service`.
-
-Zusätzlich prüft die API im CT selbstständig in einem Intervall (**Server NET** = NGINX :443, **Server WEB** = DNS, **Server API** = direkter Uvicorn-Port; siehe `fokuno_proxmox/deploy/staging_api/README.md`, Variable `AHDS_REACHABILITY_INTERVAL_SEC`).
 
 ### Optional: Host reagiert auf Datei `update_request.json` im CT (Watcher)
 
@@ -136,7 +134,7 @@ Das Skript richtet automatisch ein:
 - NGINX Reverse Proxy
 - TLS mit Certbot (**`--quiet`**, bei Fehler nur ein **kurzer Auszug** aus `letsencrypt.log`)
 - optional DuckDNS-Cron (wenn Token eingegeben wird)
-- **`STAGING_DOMAIN`** und **`TLS_EMAIL`** in `/opt/ahds-native/.env` (damit die Startseite NET/WEB sinnvoll prüfen kann)
+- **`STAGING_DOMAIN`** und **`TLS_EMAIL`** in `/opt/ahds-native/.env` (für NGINX, TLS und öffentliche Adresse)
 
 **NGINX kurz selbst testen** (nach Installation oder bei Problemen):
 

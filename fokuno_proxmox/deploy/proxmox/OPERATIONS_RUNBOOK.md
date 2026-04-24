@@ -123,7 +123,7 @@ Wenn ein Update fehlschlägt:
 
 ## 7) NGINX + TLS nativ (LXC ohne Docker)
 
-### Domain in der API-`.env` (wichtig für „Server NET/WEB“ auf der Startseite)
+### Domain in der API-`.env` (TLS und öffentliche Adresse)
 
 Der Installer schreibt `STAGING_DOMAIN` und `TLS_EMAIL` nach `/opt/ahds-native/.env`. Fehlen die Zeilen bei einer älteren Installation:
 

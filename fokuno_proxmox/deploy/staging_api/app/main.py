@@ -2,19 +2,15 @@
 
 from __future__ import annotations
 
-import asyncio
 import base64
 import datetime as dt
 import hashlib
 import hmac
 import html
-import http.client
 import json
 import os
 from pathlib import Path
 import secrets
-import ssl
-import threading
 import time
 from typing import Any
 from zoneinfo import ZoneInfo
@@ -27,14 +23,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.3.8")
+app = FastAPI(title="AhDs Staging API", version="0.4.0")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.1.5"
+_SERVER_UI_VERSION = "ui-0.2.0"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
@@ -47,18 +43,6 @@ _UPDATE_STATUS_PATH = Path(
 )
 _SERVER_STARTED_AT = dt.datetime.now(dt.timezone.utc)
 _SERVER_COUNTER: dict[str, int] = {"major": 0, "minor": 0, "patch": 0, "total": 0}
-
-_REACHABILITY_LOCK = threading.Lock()
-_REACHABILITY: dict[str, Any] = {
-    "net_ok": None,
-    "web_ok": None,
-    "api_direct_ok": None,
-    "net_detail": "",
-    "web_detail": "",
-    "api_direct_detail": "",
-    "checked_at": "",
-}
-_REACHABILITY_TASK: asyncio.Task[Any] | None = None
 _DEPRECATED_PATHS: dict[str, dict[str, str]] = {
     "/v1/admin/logs": {
         "sunset": "Wed, 31 Dec 2026 23:59:59 GMT",
@@ -312,165 +296,6 @@ def _update_status_laden() -> dict[str, Any]:
     except Exception:
         pass
     return {"status": "error", "detail": "Update-Statusdatei ist ungültig."}
-
-
-def _staging_domain_oeffentlich() -> str:
-    d = (os.environ.get("STAGING_DOMAIN") or "").strip()
-    if d:
-        return d
-    return (_runtime_env_laden().get("STAGING_DOMAIN") or "").strip()
-
-
-def _reachability_lesen() -> dict[str, Any]:
-    with _REACHABILITY_LOCK:
-        return dict(_REACHABILITY)
-
-
-def _reachability_schreiben(**kwargs: Any) -> None:
-    with _REACHABILITY_LOCK:
-        _REACHABILITY.update(kwargs)
-
-
-def _api_health_port() -> int:
-    for key in ("AHDS_API_HEALTH_PORT", "PORT"):
-        v = (os.environ.get(key) or "").strip()
-        if v.isdigit():
-            return max(1, min(65535, int(v)))
-    return 8000
-
-
-def _http_health_api_direkt() -> tuple[bool, str]:
-    """Uvicorn/FastAPI ohne NGINX (typisch Port 8000)."""
-    port = _api_health_port()
-    try:
-        conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5.0)
-        conn.request("GET", "/health")
-        res = conn.getresponse()
-        raw = res.read(4000)
-        conn.close()
-        if res.status != 200:
-            return False, f"HTTP {res.status} (Port {port})"
-        try:
-            data = json.loads(raw.decode("utf-8"))
-        except Exception:
-            return False, f"Kein JSON (Port {port})"
-        if data.get("status") == "ok":
-            return True, f"HTTP /health direkt auf Port {port}"
-        return False, f"JSON-Status {data.get('status')!r} (Port {port})"
-    except Exception as exc:
-        return False, str(exc)[:200]
-
-
-def _https_health_net(staging_domain: str) -> tuple[bool, str]:
-    """NGINX+TLS lokal: 127.0.0.1:443 mit SNI wie der öffentliche Hostname."""
-    if not staging_domain:
-        return False, "STAGING_DOMAIN fehlt"
-    ctx = ssl.create_default_context()
-    try:
-        conn = http.client.HTTPSConnection(
-            "127.0.0.1",
-            port=443,
-            timeout=10.0,
-            context=ctx,
-            server_hostname=staging_domain,
-        )
-        conn.request("GET", "/health", headers={"Host": staging_domain})
-        res = conn.getresponse()
-        raw = res.read(4000)
-        conn.close()
-        if res.status != 200:
-            return False, f"HTTP {res.status}"
-        try:
-            data = json.loads(raw.decode("utf-8"))
-        except Exception:
-            return False, "Antwort ist kein JSON"
-        if data.get("status") == "ok":
-            return True, "HTTPS /health über NGINX (Loopback)"
-        return False, f"Unerwarteter JSON-Status: {data.get('status')!r}"
-    except Exception as exc:
-        return False, str(exc)[:220]
-
-
-def _https_health_web(staging_domain: str) -> tuple[bool, str]:
-    """Wie ein Client von außen: DNS + TLS + /health."""
-    if not staging_domain:
-        return False, "STAGING_DOMAIN fehlt"
-    ctx = ssl.create_default_context()
-    try:
-        conn = http.client.HTTPSConnection(
-            staging_domain,
-            port=443,
-            timeout=15.0,
-            context=ctx,
-        )
-        conn.request("GET", "/health")
-        res = conn.getresponse()
-        raw = res.read(4000)
-        conn.close()
-        if res.status != 200:
-            return False, f"HTTP {res.status}"
-        try:
-            data = json.loads(raw.decode("utf-8"))
-        except Exception:
-            return False, "Antwort ist kein JSON"
-        if data.get("status") == "ok":
-            return True, "HTTPS /health über öffentlichen Hostnamen"
-        return False, f"Unerwarteter JSON-Status: {data.get('status')!r}"
-    except Exception as exc:
-        return False, str(exc)[:220]
-
-
-def _reachability_einmal_pruefen() -> None:
-    domain = _staging_domain_oeffentlich()
-    zeit = _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
-    api_ok, api_de = _http_health_api_direkt()
-    if not domain:
-        _reachability_schreiben(
-            net_ok=False,
-            web_ok=False,
-            api_direct_ok=api_ok,
-            net_detail="STAGING_DOMAIN fehlt",
-            web_detail="STAGING_DOMAIN fehlt",
-            api_direct_detail=api_de,
-            checked_at=zeit,
-        )
-        return
-    net_ok, net_de = _https_health_net(domain)
-    web_ok, web_de = _https_health_web(domain)
-    _reachability_schreiben(
-        net_ok=net_ok,
-        web_ok=web_ok,
-        api_direct_ok=api_ok,
-        net_detail=net_de,
-        web_detail=web_de,
-        api_direct_detail=api_de,
-        checked_at=zeit,
-    )
-
-
-async def _reachability_schleife() -> None:
-    try:
-        inter = max(30, int(os.environ.get("AHDS_REACHABILITY_INTERVAL_SEC", "120")))
-    except ValueError:
-        inter = 120
-    await asyncio.sleep(8)
-    while True:
-        try:
-            await asyncio.to_thread(_reachability_einmal_pruefen)
-        except Exception as exc:
-            zeit = _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ")
-            msg = f"Prüffehler: {exc}"[:220]
-            api_ok, api_de = _http_health_api_direkt()
-            _reachability_schreiben(
-                net_ok=False,
-                web_ok=False,
-                api_direct_ok=api_ok,
-                net_detail=msg,
-                web_detail=msg,
-                api_direct_detail=api_de,
-                checked_at=zeit,
-            )
-        await asyncio.sleep(inter)
 
 
 def _admin_form_html(
@@ -837,26 +662,6 @@ def startup_migrationen() -> None:
     _server_counter_aktualisieren()
 
 
-@app.on_event("startup")
-async def startup_erreichbarkeit() -> None:
-    """Periodisch NET (NGINX Loopback) und WEB (öffentlicher DNS) prüfen."""
-    global _REACHABILITY_TASK
-    _REACHABILITY_TASK = asyncio.create_task(_reachability_schleife())
-
-
-@app.on_event("shutdown")
-async def shutdown_erreichbarkeit() -> None:
-    global _REACHABILITY_TASK
-    t = _REACHABILITY_TASK
-    _REACHABILITY_TASK = None
-    if t is not None:
-        t.cancel()
-        try:
-            await t
-        except asyncio.CancelledError:
-            pass
-
-
 @app.middleware("http")
 async def api_versions_header(request: Request, call_next):  # type: ignore[no-untyped-def]
     if request.url.path.startswith("/v1") and request.url.path != "/v1/meta/version":
@@ -912,6 +717,52 @@ def ready(response: Response) -> dict[str, Any]:
     return {"db": "ok", "app_env": _app_env()}
 
 
+def _startseite_refresh_ms() -> int:
+    try:
+        return max(10_000, int(os.environ.get("AHDS_STARTSEITE_AKTUALISIERUNG_MS", "30000")))
+    except ValueError:
+        return 30_000
+
+
+@app.get("/status/aktuell")
+def status_aktuell() -> dict[str, Any]:
+    """Kompakte Daten für die Startseite (Auto-Aktualisierung im Browser)."""
+    host = _update_status_laden()
+    poll_sec = _poll_intervall_sekunden(host)
+    next_iso = _naechste_poll_iso_zeile(host)
+    checked_raw = str(host.get("checked_at") or "").strip()
+    hu_lokal, hu_utc = _host_letzter_lauf_anzeige(checked_raw)
+    next_lokal, next_utc = "—", "—"
+    if next_iso:
+        tn = _iso_nach_utc_zeile(next_iso)
+        if tn is not None:
+            next_lokal = tn.astimezone(_anzeige_zone()).strftime("%Y-%m-%d %H:%M:%S")
+            next_utc = tn.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+    sha = host.get("deployed_sha")
+    if sha:
+        s = str(sha)
+        sha_kurz = s[:12] + "…" if len(s) > 12 else s
+    else:
+        sha_kurz = "—"
+    return {
+        "serverzeit_utc": _utc_now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+        "version_api": _API_RELEASE,
+        "host_update": {
+            "status": host.get("status"),
+            "detail": host.get("detail"),
+            "checked_at": host.get("checked_at"),
+            "letzter_lauf_lokal": hu_lokal,
+            "letzter_lauf_utc": hu_utc,
+            "naechste_pruefung_lokal": next_lokal,
+            "naechste_pruefung_utc": next_utc,
+            "next_poll_at": next_iso or None,
+            "intervall_text": _poll_intervall_text(poll_sec),
+            "deployed_sha_kurz": sha_kurz,
+        },
+        "zeitzone_anzeige": _ANZEIGE_TZ_NAME,
+    }
+
+
 @app.get("/")
 def root() -> HTMLResponse:
     env = _app_env()
@@ -942,7 +793,6 @@ def root() -> HTMLResponse:
     poll_sec = _poll_intervall_sekunden(host_update)
     poll_txt_e = html.escape(_poll_intervall_text(poll_sec), quote=True)
     hu_next_iso = _naechste_poll_iso_zeile(host_update)
-    hu_next_attr = html.escape(hu_next_iso, quote=True)
     nxt_lokal_e = "—"
     nxt_utc_e = "—"
     if hu_next_iso:
@@ -965,42 +815,9 @@ def root() -> HTMLResponse:
         s_sha = str(hu_sha)
         hu_sha_str = s_sha[:12] + "…" if len(s_sha) > 12 else s_sha
     hu_sha_esc = html.escape(hu_sha_str, quote=True)
-    rch = _reachability_lesen()
-    try:
-        rch_inter = max(30, int(os.environ.get("AHDS_REACHABILITY_INTERVAL_SEC", "120")))
-    except ValueError:
-        rch_inter = 120
-    rch_inter_e = html.escape(str(rch_inter), quote=True)
-    rch_checked_e = html.escape(str(rch.get("checked_at") or "—"), quote=True)
-
-    def _pill_erreichbarkeit(ok: Any, kurz: str, detail: str) -> str:
-        if ok is True:
-            cls, kurz_txt = "ok", f"{kurz} · erreichbar"
-        elif ok is False:
-            cls, kurz_txt = "warn", f"{kurz} · nicht erreichbar"
-        else:
-            cls, kurz_txt = "neutral", f"{kurz} · ausstehend"
-        titel = html.escape((detail or "")[:480], quote=True)
-        txt = html.escape(kurz_txt, quote=True)
-        return f'<span class="pill {cls}" title="{titel}">{txt}</span>'
-
-    api_port_disp = _api_health_port()
-    api_port_e = html.escape(str(api_port_disp), quote=True)
-    pill_net = _pill_erreichbarkeit(
-        rch.get("net_ok"),
-        "Server NET (NGINX :443)",
-        str(rch.get("net_detail") or ""),
-    )
-    pill_web = _pill_erreichbarkeit(
-        rch.get("web_ok"),
-        "Server WEB (DNS+HTTPS)",
-        str(rch.get("web_detail") or ""),
-    )
-    pill_api = _pill_erreichbarkeit(
-        rch.get("api_direct_ok"),
-        f"Server API (:{api_port_disp})",
-        str(rch.get("api_direct_detail") or ""),
-    )
+    refresh_ms = _startseite_refresh_ms()
+    refresh_sek = max(1, refresh_ms // 1000)
+    next_poll_json = json.dumps(hu_next_iso or "")
     page_html = f"""<!doctype html>
 <html lang="de">
   <head>
@@ -1123,29 +940,24 @@ def root() -> HTMLResponse:
         <div class="titlebar">{html.escape(title_line)}</div>
         <h1>Bei AhDs Staging Server anmelden</h1>
         <div>
-          {pill_net}
-          {pill_web}
-          {pill_api}
-          <span class="pill">APP_ENV: {env}</span>
-          <span class="pill">API: {_API_MAJOR} / {_API_RELEASE}</span>
-          <span class="pill">UI-Version: {_SERVER_UI_VERSION}</span>
+          <span class="pill ok">Verbunden mit dem Test-Server</span>
+          <span class="pill">Umgebung: {env}</span>
+          <span class="pill">Programm-Version {_API_RELEASE}</span>
+          <span class="pill">Oberfläche {_SERVER_UI_VERSION}</span>
         </div>
-        <div class="smalllink muted">
-          <strong>Erreichbarkeit:</strong>
-          <strong>Server NET</strong> prüft nur <strong>NGINX mit TLS auf Port 443</strong> (Loopback mit deinem Hostnamen).
-          Wenn deine URL <code>:{api_port_e}</code> enthält (direkt Uvicorn/FastAPI), läuft der Weg <strong>ohne NGINX</strong> — dann ist meist
-          <strong>Server API</strong> grün, <strong>Server NET</strong> kann trotzdem rot sein (NGINX wird umgangen).
-          <strong>Server WEB</strong> = gleicher Hostname per DNS/TLS wie von außen (ohne NAT-Hairpin oft rot).<br />
-          Letzte Prüfung: {rch_checked_e} UTC · Intervall ca. {rch_inter_e} s (<code>AHDS_REACHABILITY_INTERVAL_SEC</code>).
+        <div class="smalllink muted" id="zeile-auto">
+          Die Infos zum Update vom Heimserver und die Uhr darunter holen sich diese Seite selbst —
+          alle <strong id="txt-refresh-sek">{refresh_sek}</strong> Sekunden. Du musst nichts neu laden.
+          Zuletzt abgefragt: <strong id="txt-stand-zeit">—</strong> (Zeitstempel vom Server)
         </div>
-        <div class="smalllink muted" style="margin-top:4px;">
-          <strong>Host-Update (Proxmox, <code>native_update_ct.sh</code>):</strong><br />
-          Letzter Lauf: {hu_lokal_e} ({tz_label_e}) · {hu_utc_e} UTC<br />
-          Geplantes Prüf-Intervall (laut Host): {poll_txt_e}<br />
-          Nächste Prüfung (Zielzeit): {nxt_lokal_e} ({tz_label_e}) · {nxt_utc_e} UTC<br />
-          Status: {hu_status} · Detail: {hu_detail}<br />
-          Deployment-Commit: <code>{hu_sha_esc}</code><br />
-          <span id="update-poll-countdown" class="muted" data-next-poll-at="{hu_next_attr}"></span>
+        <div class="smalllink muted" id="kasten-updates" style="margin-top:6px;">
+          <strong>Programm vom Heimserver beziehen</strong><br />
+          Letzter Lauf: <span id="hu-ll">{hu_lokal_e}</span> ({tz_label_e}) · <span id="hu-lu">{hu_utc_e}</span> UTC<br />
+          Wie oft nach neuem Stand geschaut wird: <span id="hu-it">{poll_txt_e}</span><br />
+          Nächster geplanter Zeitpunkt: <span id="hu-nl">{nxt_lokal_e}</span> · UTC <span id="hu-nu">{nxt_utc_e}</span><br />
+          Ergebnis der letzten Prüfung: <span id="hu-st">{hu_status}</span> — <span id="hu-dt">{hu_detail}</span><br />
+          Kurzbezeichnung des eingespielten Stands: <code id="hu-sh">{hu_sha_esc}</code><br />
+          <span id="update-countdown" class="muted"></span>
         </div>
 
         <div class="grid">
@@ -1219,36 +1031,63 @@ Total: {_SERVER_COUNTER["total"]}</div>
         }}
       }});
 
-      (function updatePollCountdown() {{
-        const el = document.getElementById("update-poll-countdown");
-        if (!el) return;
-        const iso = (el.getAttribute("data-next-poll-at") || "").trim();
-        if (!iso) {{
-          el.textContent = "Update-Countdown: Noch kein Host-Lauf protokolliert (update_status.json).";
-          return;
-        }}
-        const tNext = Date.parse(iso);
-        if (Number.isNaN(tNext)) {{
-          el.textContent = "Update-Countdown: Zielzeit nicht lesbar.";
-          return;
-        }}
-        function tick() {{
+      (function startseiteAuto() {{
+        const REFRESH_MS = {refresh_ms};
+        let nextPollIso = {next_poll_json};
+        const elCd = document.getElementById("update-countdown");
+        const setz = (id, txt) => {{
+          const n = document.getElementById(id);
+          if (n) n.textContent = txt;
+        }};
+        function countdownSchreiben() {{
+          if (!elCd) return;
+          const iso = (nextPollIso || "").trim();
+          if (!iso) {{
+            elCd.textContent = "Es wurde noch kein Lauf vom Heimserver vermerkt.";
+            return;
+          }}
+          const tNext = Date.parse(iso);
+          if (Number.isNaN(tNext)) {{
+            elCd.textContent = "Nächster Zeitpunkt konnte nicht gelesen werden.";
+            return;
+          }}
           const sec = Math.floor((tNext - Date.now()) / 1000);
           if (sec <= 0) {{
-            el.textContent = "Update-Countdown: Zielzeit erreicht — nächster Lauf hängt am systemd-Timer auf dem Host; Seite später neu laden.";
+            elCd.textContent = "Nächster Prüfzeitpunkt ist fällig — der Heimserver holt den neuen Stand in Kürze nach. Diese Zeile gleicht sich von selbst wieder an.";
             return;
           }}
           const h = Math.floor(sec / 3600);
           const m = Math.floor((sec % 3600) / 60);
           const s = sec % 60;
           const teile = [];
-          if (h > 0) teile.push(h + " h");
-          if (h > 0 || m > 0) teile.push(m + " min");
-          teile.push(s + " s");
-          el.textContent = "Update-Countdown — nächste geplante Prüfung in: " + teile.join(" ");
+          if (h > 0) teile.push(h + " Std");
+          if (h > 0 || m > 0) teile.push(m + " Min");
+          teile.push(s + " Sek");
+          elCd.textContent = "Countdown bis zur nächsten Prüfung auf neuen Programm-Stand: " + teile.join(" ");
         }}
-        tick();
-        setInterval(tick, 1000);
+        async function datenHolen() {{
+          try {{
+            const res = await fetch("/status/aktuell", {{ cache: "no-store" }});
+            const j = await res.json();
+            const h = j.host_update || {{}};
+            nextPollIso = h.next_poll_at || "";
+            setz("txt-stand-zeit", j.serverzeit_utc || "—");
+            setz("hu-ll", h.letzter_lauf_lokal || "—");
+            setz("hu-lu", h.letzter_lauf_utc || "—");
+            setz("hu-it", h.intervall_text || "—");
+            setz("hu-nl", h.naechste_pruefung_lokal || "—");
+            setz("hu-nu", h.naechste_pruefung_utc || "—");
+            setz("hu-st", String(h.status ?? "—"));
+            setz("hu-dt", String(h.detail ?? "—"));
+            setz("hu-sh", String(h.deployed_sha_kurz ?? "—"));
+            countdownSchreiben();
+          }} catch (e) {{
+            setz("txt-stand-zeit", "Aktualisierung fehlgeschlagen");
+          }}
+        }}
+        setInterval(countdownSchreiben, 1000);
+        setInterval(datenHolen, REFRESH_MS);
+        datenHolen();
       }})();
     </script>
   </body>
