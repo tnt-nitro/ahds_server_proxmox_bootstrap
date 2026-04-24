@@ -21,7 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
-app = FastAPI(title="AhDs Staging API", version="0.3.1")
+app = FastAPI(title="AhDs Staging API", version="0.3.2")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
@@ -1004,7 +1004,11 @@ def update_request() -> dict[str, str]:
     _update_request_schreiben()
     return {
         "status": "ok",
-        "detail": "Update wurde angefordert. Der Proxmox-Updater spielt es beim nächsten Lauf ein.",
+        "detail": (
+            "Update wurde angefordert. Auf dem Proxmox-Host startet der Watcher-Timer "
+            "(ahds-native-update-on-request, siehe README) in der Regel innerhalb von etwa einer Minute "
+            "das Einspielen; ohne diesen Timer bitte auf dem Host manuell native_update_ct.sh ausführen."
+        ),
     }
 
 

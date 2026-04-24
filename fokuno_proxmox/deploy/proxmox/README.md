@@ -71,10 +71,33 @@ CTID=113 ./native_update_ct.sh
 Die Browser-Seite (`/`) bietet zusätzlich:
 
 - **Update prüfen**: zeigt den letzten Updater-Status an
-- **Update installieren**: schreibt eine Update-Anforderung in den CT;
-  beim nächsten Timer-Lauf wird diese abgearbeitet
+- **Update installieren**: legt im CT eine Anforderungsdatei an; auf dem **Proxmox-Host** muss dafür der Watcher-Timer aktiv sein (siehe unten), sonst manuell `native_update_ct.sh` ausführen
 
-### Auto-Update per systemd-Timer (alle 15 Minuten)
+### Sofort-Update nach Klick im Browser (Watcher auf dem Host)
+
+Der API-Prozess läuft **im CT** und kann den Proxmox-Host nicht direkt ansteuern. Damit der Button trotzdem „sofort“ wirkt, gibt es auf dem Host ein kleines Skript plus Timer (ca. alle 45 Sekunden):
+
+```bash
+cd /opt/ahds/fokuno_proxmox/deploy/proxmox
+chmod +x native_update_ct_on_request.sh
+cp systemd/ahds-native-update-on-request.service /etc/systemd/system/
+cp systemd/ahds-native-update-on-request.timer /etc/systemd/system/
+systemctl daemon-reload
+systemctl enable --now ahds-native-update-on-request.timer
+```
+
+Wenn die CT-ID nicht **113** ist, in beiden Unit-Dateien `Environment=CTID=113` anpassen, dann `daemon-reload` und Timer neu starten.
+
+Prüfen:
+
+```bash
+systemctl status ahds-native-update-on-request.timer
+journalctl -u ahds-native-update-on-request.service -n 40 --no-pager
+```
+
+### Auto-Update per systemd-Timer (alle 15 Minuten, optional)
+
+Periodisches Einspielen neuer Commits **ohne** Klick im Browser:
 
 ```bash
 cp systemd/ahds-native-update.service /etc/systemd/system/

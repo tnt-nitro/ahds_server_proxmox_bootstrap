@@ -1,0 +1,11 @@
+[Unit]
+Description=AhDs prüft alle 45s auf Browser-Update-Anforderung
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=45s
+Persistent=true
+Unit=ahds-native-update-on-request.service
+
+[Install]
+WantedBy=timers.target

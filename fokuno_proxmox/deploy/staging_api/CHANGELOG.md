@@ -1,5 +1,10 @@
 # API Changelog (Staging API)
 
+## 0.3.2
+
+- Klarere Rückmeldung zu `/update/request`: Hinweis auf Proxmox-Host-Watcher bzw. manuelles Skript
+- Proxmox-Doku: Watcher-Timer (`ahds-native-update-on-request`) für nahezu sofortige Reaktion auf den Browser-Button
+
 ## 0.3.1
 
 - Root-Seite sprachlich bereinigt (kein „Title“ mehr in der Überschrift)
