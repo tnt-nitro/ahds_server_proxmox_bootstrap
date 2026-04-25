@@ -1027,7 +1027,7 @@ UI-Version: {_SERVER_UI_VERSION}</div>
 
 
 @app.get("/admin")
-def admin_login(request: Request) -> HTMLResponse | RedirectResponse:
+def admin_login(request: Request) -> Response:
     if _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin/panel", status_code=303)
     return HTMLResponse(content=_admin_login_html())
@@ -1037,7 +1037,7 @@ def admin_login(request: Request) -> HTMLResponse | RedirectResponse:
 def admin_login_submit(
     username: str = Form(default=""),
     password: str = Form(default=""),
-) -> HTMLResponse | RedirectResponse:
+) -> Response:
     if username.strip() != _ADMIN_PANEL_USER or password != _ADMIN_PANEL_PASSWORD:
         return HTMLResponse(content=_admin_login_html(fehler="Benutzer oder Passwort falsch."), status_code=401)
     rsp = RedirectResponse(url="/admin/panel", status_code=303)
@@ -1061,7 +1061,7 @@ def admin_logout() -> RedirectResponse:
 
 
 @app.get("/admin/panel")
-def admin_panel(request: Request) -> HTMLResponse | RedirectResponse:
+def admin_panel(request: Request) -> Response:
     if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()
@@ -1080,7 +1080,7 @@ def admin_panel_save(
     login_max: str = Form(default="5"),
     login_lock: str = Form(default="900"),
     reset_ttl: str = Form(default="1800"),
-) -> HTMLResponse | RedirectResponse:
+) -> Response:
     if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()
