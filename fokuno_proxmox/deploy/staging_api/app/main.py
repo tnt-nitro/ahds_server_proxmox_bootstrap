@@ -23,14 +23,14 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.4.3")
+app = FastAPI(title="AhDs Staging API", version="0.4.4")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.2.3"
+_SERVER_UI_VERSION = "ui-0.2.4"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _ADMIN_SESSION_COOKIE = "ahds_admin_session"
@@ -209,6 +209,15 @@ def _admin_host_pruefen(request: Request) -> None:
     if _request_host(request) == _ADMIN_ALLOWED_HOST:
         return
     raise HTTPException(status_code=404, detail="Not Found")
+
+
+def _root_host_modus(request: Request) -> str:
+    """legacy | user | admin — steuert die Startseite unter /."""
+    if not _ADMIN_ALLOWED_HOST:
+        return "legacy"
+    if _request_host(request) == _ADMIN_ALLOWED_HOST:
+        return "admin"
+    return "user"
 
 
 def _admin_login_html(*, fehler: str = "") -> str:
@@ -886,11 +895,103 @@ def status_aktuell() -> dict[str, Any]:
     }
 
 
+def _root_html_user(*, env: str, invocation: str) -> str:
+    """Startseite für Endnutzer (nicht Admin-Host)."""
+    title_line = f"AhDs · v{_API_RELEASE} · {invocation} UTC"
+    return f"""<!doctype html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{html.escape(title_line)}</title>
+    <style>
+      :root {{
+        color-scheme: light;
+        --bg: #f5f0e6;
+        --card: #fffef8;
+        --text: #35312b;
+        --muted: #6f6b64;
+        --accent: #9f8a60;
+      }}
+      body {{
+        margin: 0;
+        background: var(--bg);
+        color: var(--text);
+        font-family: "Segoe UI", system-ui, sans-serif;
+      }}
+      .wrap {{
+        max-width: 720px;
+        margin: 28px auto;
+        padding: 0 16px;
+      }}
+      .card {{
+        background: var(--card);
+        border: 1px solid #e5dccb;
+        border-radius: 14px;
+        padding: 22px 20px 20px;
+        box-shadow: 0 4px 14px rgba(25, 18, 8, 0.05);
+      }}
+      .titlebar {{
+        font-size: 0.88rem;
+        color: #5c584f;
+        margin-bottom: 10px;
+      }}
+      h1 {{
+        margin: 0 0 8px;
+        font-size: 1.45rem;
+      }}
+      .muted {{ color: var(--muted); line-height: 1.45; }}
+      .pill {{
+        display: inline-block;
+        margin: 10px 8px 0 0;
+        padding: 5px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        border: 1px solid #d8ccb8;
+      }}
+      .ok {{ color: #1f6b37; border-color: #9ed0ae; background: #edf8f0; }}
+      a {{ color: var(--accent); text-decoration: none; }}
+      a:hover {{ text-decoration: underline; }}
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="titlebar">{html.escape(title_line)}</div>
+        <h1>Willkommen</h1>
+        <p class="muted">
+          Hier entsteht die öffentliche Web-Oberfläche von AhDs. Funktionen und
+          Anmeldung für Nutzer folgen schrittweise.
+        </p>
+        <p class="muted">
+          Server-Administration ist absichtlich nicht unter dieser Adresse erreichbar.
+        </p>
+        <div>
+          <span class="pill ok">Bereit</span>
+          <span class="pill">{html.escape(env)}</span>
+          <span class="pill">API v{_API_RELEASE}</span>
+        </div>
+        <p class="muted" style="margin-top:16px;">
+          Technische API-Dokumentation: <a href="/docs">/docs</a>
+        </p>
+      </div>
+    </div>
+  </body>
+</html>"""
+
+
 @app.get("/")
-def root() -> HTMLResponse:
+def root(request: Request) -> HTMLResponse:
     env = _app_env()
     invocation = _utc_now().strftime("%Y-%m-%d %H:%M:%S")
-    title_line = f"AhDs Staging Server · v{_API_RELEASE} · {invocation} UTC"
+    modus = _root_host_modus(request)
+    if modus == "user":
+        return HTMLResponse(content=_root_html_user(env=env, invocation=invocation))
+    title_line = (
+        f"AhDs · Administration · v{_API_RELEASE} · {invocation} UTC"
+        if modus == "admin"
+        else f"AhDs Staging Server · v{_API_RELEASE} · {invocation} UTC"
+    )
     page_html = f"""<!doctype html>
 <html lang="de">
   <head>
@@ -1020,7 +1121,7 @@ def root() -> HTMLResponse:
       <div class="card">
         <div class="titlebar">{html.escape(title_line)}</div>
         <h1>Anmeldung</h1>
-        <p class="page-sub muted">AhDs Staging Server · API</p>
+        <p class="page-sub muted">{"Administration · API" if modus == "admin" else "AhDs Staging Server · API"}</p>
         <div>
           <span class="pill ok">Online</span>
           <span class="pill">{html.escape(env)}</span>

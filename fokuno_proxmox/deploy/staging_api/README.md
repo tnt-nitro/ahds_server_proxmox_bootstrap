@@ -28,7 +28,7 @@ docker compose -f staging-compose.yml up -d
 
 ## Wichtige Endpunkte
 
-- `GET /` – AhDs Browser-Startseite (Pills, Bereich Zugang, Bereich System)
+- `GET /` – Startseite: bei `AHDS_ADMIN_HOST` auf der User-Domain eine **Willkommensseite**; auf dem Admin-Host die Zugangs-/System-Ansicht (ohne `AHDS_ADMIN_HOST` wie bisher kombiniert)
 - `GET /status/aktuell` – JSON-Status (Host-Update, Serverzeit; aktuell nicht auf der Startseite angezeigt)
 - `GET /admin` – Admin-Login
 - `GET /admin/panel` – Admin-Seite für Runtime-Werte (.env), nur nach Login

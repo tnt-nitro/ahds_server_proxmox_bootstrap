@@ -1,5 +1,10 @@
 # API Changelog (Staging API)
 
+## 0.4.4
+
+- Startseite (`/`): bei gesetztem `AHDS_ADMIN_HOST` liefert die **User-Domain** eine neutrale Willkommensseite; der **Admin-Host** behält die bisherige Zugangs-/System-Ansicht
+- `_SERVER_UI_VERSION` auf `ui-0.2.4`
+
 ## 0.4.3
 
 - Adminzugang per Host trennbar: wenn `AHDS_ADMIN_HOST` gesetzt ist, sind `/admin*` nur auf diesem Host erreichbar (sonst 404)
