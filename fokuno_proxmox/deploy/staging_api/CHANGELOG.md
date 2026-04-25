@@ -1,5 +1,13 @@
 # API Changelog (Staging API)
 
+## 0.4.2
+
+- `/admin` zeigt jetzt nur noch den Login; das eigentliche Adminpanel liegt geschützt hinter Session unter `/admin/panel`
+- Neues Admin-Login per Formular (aktuell `Admin` / `x`) inkl. Abmelden; alte direkte Basic-Auth-Erreichbarkeit entfernt
+- Startseite (`/`) auf Kernbereiche reduziert: Kopfzeile, Pills, `Zugang`, `System`
+- Bereich „Development Status“ aus der Startseite in den Adminbereich verschoben
+- `_SERVER_UI_VERSION` auf `ui-0.2.2`
+
 ## 0.4.1
 
 - Startseite (`/`): Texte gestrafft, Layout für Deployment-Status (Raster), dezente Typografie (`tabular-nums`, Monospace-Zeiten)

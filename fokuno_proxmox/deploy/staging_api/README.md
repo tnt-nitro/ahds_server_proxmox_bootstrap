@@ -28,9 +28,10 @@ docker compose -f staging-compose.yml up -d
 
 ## Wichtige Endpunkte
 
-- `GET /` – AhDs Browser-Startseite (Host-Update-Infos mit Auto-Aktualisierung, Login)
-- `GET /status/aktuell` – JSON für die Startseite (Serverzeit, Host-Update aus `update_status.json`)
-- `GET /admin` – Admin-Seite für Runtime-Werte (.env)
+- `GET /` – AhDs Browser-Startseite (Pills, Bereich Zugang, Bereich System)
+- `GET /status/aktuell` – JSON-Status (Host-Update, Serverzeit; aktuell nicht auf der Startseite angezeigt)
+- `GET /admin` – Admin-Login
+- `GET /admin/panel` – Admin-Seite für Runtime-Werte (.env), nur nach Login
 - `GET /health` – Liveness
 - `GET /ready` – DB-Readiness
 - `GET /v1/meta/version`
@@ -48,18 +49,13 @@ docker compose -f staging-compose.yml up -d
 - `GET /v1/admin/audit-logs` (nur `admin`)
 - `GET /v1/admin/logs` (deprecated Alias auf Audit-Logs)
 
-## Startseite: Auto-Aktualisierung (`/`)
-
-Die HTML-Startseite lädt Host-Update-Daten und den Countdown per `fetch` von **`GET /status/aktuell`** nach, ohne dass du die Seite neu laden musst.
-
-- **`AHDS_STARTSEITE_AKTUALISIERUNG_MS`**: Abstand zwischen den Abrufen im Browser (Standard **30000**, Minimum **10000**). Setzen im systemd-Service `ahds-staging-api` (Umgebungsvariablen der Unit), danach Dienst neu starten.
-
 ## Admin-Seite (temporär)
 
-- Login per HTTP Basic Auth:
+- Login per Formular unter `/admin`:
   - User: `Admin`
   - Passwort: `x`
-- Über `/admin` kannst du Installationswerte nachträglich pflegen
+- Nach erfolgreichem Login liegt das Panel unter `/admin/panel`.
+- Über das Panel kannst du Installationswerte nachträglich pflegen
   (`STAGING_DOMAIN`, `TLS_EMAIL`, `ADMIN_EMAIL`, Limits, optionale Secrets).
 - Hinweis: Nach Änderungen an Secrets/DB-Werten den Service neu starten:
   `systemctl restart ahds-staging-api`

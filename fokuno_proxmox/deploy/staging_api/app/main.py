@@ -17,22 +17,24 @@ from zoneinfo import ZoneInfo
 
 import psycopg
 from fastapi import FastAPI, Form, Header, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field
 from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.4.1")
+app = FastAPI(title="AhDs Staging API", version="0.4.2")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.2.1"
+_SERVER_UI_VERSION = "ui-0.2.2"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
+_ADMIN_SESSION_COOKIE = "ahds_admin_session"
+_ADMIN_SESSION_TTL_SEC = int(os.environ.get("AHDS_ADMIN_SESSION_TTL_SEC", "43200"))
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
 _SERVER_PROJECT_START = dt.date(2026, 4, 4)
 _SERVER_STATUS_PATH = Path(
@@ -149,41 +151,75 @@ def _admin_email() -> str:
     return (os.environ.get("ADMIN_EMAIL") or "").strip().lower()
 
 
-def _admin_panel_auth_pruefen(authorization: str | None) -> None:
-    if not authorization:
-        raise HTTPException(
-            status_code=401,
-            detail="Login erforderlich",
-            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
-        )
-    teile = authorization.split(" ", 1)
-    if len(teile) != 2 or teile[0].lower() != "basic":
-        raise HTTPException(
-            status_code=401,
-            detail="Basic Auth erforderlich",
-            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
-        )
+def _admin_session_token_erzeugen(user: str) -> str:
+    exp = int(time.time()) + _ADMIN_SESSION_TTL_SEC
+    payload = f"{user}|{exp}"
+    sig = _sign(payload)
+    return f"{_b64url_encode(payload.encode('utf-8'))}.{sig}"
+
+
+def _admin_session_pruefen(token: str | None) -> bool:
+    if not token or "." not in token:
+        return False
+    payload_b64, sig = token.split(".", 1)
     try:
-        dec = base64.b64decode(teile[1]).decode("utf-8")
-    except Exception as exc:
-        raise HTTPException(
-            status_code=401,
-            detail="Ungültige Authentifizierung",
-            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
-        ) from exc
-    if ":" not in dec:
-        raise HTTPException(
-            status_code=401,
-            detail="Ungültige Authentifizierung",
-            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
-        )
-    user, pw = dec.split(":", 1)
-    if user != _ADMIN_PANEL_USER or pw != _ADMIN_PANEL_PASSWORD:
-        raise HTTPException(
-            status_code=401,
-            detail="Benutzer oder Passwort falsch",
-            headers={"WWW-Authenticate": 'Basic realm="AhDs Admin"'},
-        )
+        payload = _b64url_decode(payload_b64).decode("utf-8")
+    except Exception:
+        return False
+    if not hmac.compare_digest(sig, _sign(payload)):
+        return False
+    teile = payload.split("|", 1)
+    if len(teile) != 2:
+        return False
+    user, exp_raw = teile
+    try:
+        exp = int(exp_raw)
+    except ValueError:
+        return False
+    if time.time() > exp:
+        return False
+    return user == _ADMIN_PANEL_USER
+
+
+def _admin_login_html(*, fehler: str = "") -> str:
+    fehler_html = f'<div class="err">{html.escape(fehler)}</div>' if fehler else ""
+    return f"""<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AhDs Admin Login</title>
+  <style>
+    body {{ font-family: "Segoe UI", system-ui, sans-serif; background: #f6f0e6; color: #2f2b24; margin: 0; }}
+    .wrap {{ max-width: 460px; margin: 38px auto; padding: 0 16px; }}
+    .card {{ background: #fffef8; border: 1px solid #e7dcc7; border-radius: 12px; padding: 16px; }}
+    h1 {{ margin: 0 0 8px; font-size: 1.2rem; }}
+    p {{ margin: 4px 0 12px; color: #6f6b64; }}
+    label {{ display: block; margin: 10px 0 4px; font-weight: 600; }}
+    input {{ width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #d9ccb5; border-radius: 8px; }}
+    .err {{ margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff1f1; border: 1px solid #e2abab; color: #8b2323; }}
+    button {{ margin-top: 14px; width: 100%; background: #9f8a60; color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }}
+    .hint {{ margin-top: 10px; color: #6f6b64; font-size: 0.9rem; }}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <h1>AhDs Admin</h1>
+      <p>Anmeldung für den Adminbereich.</p>
+      {fehler_html}
+      <form method="post" action="/admin/login">
+        <label>Benutzer</label>
+        <input name="username" autocomplete="username" />
+        <label>Passwort</label>
+        <input type="password" name="password" autocomplete="current-password" />
+        <button type="submit">Anmelden</button>
+      </form>
+      <div class="hint">Aktuell: Admin / x (nur Staging-Testbetrieb).</div>
+    </div>
+  </div>
+</body>
+</html>"""
 
 
 def _runtime_env_laden() -> dict[str, str]:
@@ -338,7 +374,7 @@ def _admin_form_html(
   <div class="wrap">
     <div class="card">
       <h1>AhDs Admin – Serverwerte</h1>
-      <p>Hier kannst du die Installationswerte zentral pflegen. Login aktuell: Admin / x (später absichern).</p>
+      <p>Zentraler Bereich für Staging-Einstellungen.</p>
       {meldung_html}
       {fehler_html}
       <form method="post" action="/admin/save">
@@ -380,10 +416,26 @@ def _admin_form_html(
         <input name="reset_ttl" value="{esc("RESET_TOKEN_TTL_SEKUNDEN", "1800")}" />
         <button type="submit">Werte speichern</button>
       </form>
+      <form method="post" action="/admin/logout">
+        <button type="submit" style="margin-top: 10px; background: #6f6b64;">Abmelden</button>
+      </form>
       <div class="hint">
         Hinweis: Änderungen an Secrets/DB-Parametern werden erst nach Service-Neustart wirksam
         (<code>systemctl restart ahds-staging-api</code>).
       </div>
+      <hr style="border:0;border-top:1px solid #e9dfcf;margin:14px 0 10px;" />
+      <h1 style="font-size:1rem;margin:0 0 6px;">Development Status</h1>
+      <pre style="white-space:pre-wrap;line-height:1.4;background:#f9f5ee;padding:10px;border-radius:8px;border:1px solid #e7dcc7;">Working Title: AhDs
+Current version: v{_API_RELEASE}
+Version created: {_SERVER_STARTED_AT.strftime("%Y-%m-%d %H:%M:%S")}
+Project start date: {_SERVER_PROJECT_START.isoformat()}
+Laufzeit-Umgebung: {_app_env()}
+
+Counter (start invocations):
+Major: {_SERVER_COUNTER["major"]}
+Minor: {_SERVER_COUNTER["minor"]}
+Patch: {_SERVER_COUNTER["patch"]}
+Total: {_SERVER_COUNTER["total"]}</pre>
     </div>
   </div>
 </body>
@@ -717,13 +769,6 @@ def ready(response: Response) -> dict[str, Any]:
     return {"db": "ok", "app_env": _app_env()}
 
 
-def _startseite_refresh_ms() -> int:
-    try:
-        return max(10_000, int(os.environ.get("AHDS_STARTSEITE_AKTUALISIERUNG_MS", "30000")))
-    except ValueError:
-        return 30_000
-
-
 @app.get("/status/aktuell")
 def status_aktuell() -> dict[str, Any]:
     """Kompakte Daten für die Startseite (Auto-Aktualisierung im Browser)."""
@@ -766,50 +811,8 @@ def status_aktuell() -> dict[str, Any]:
 @app.get("/")
 def root() -> HTMLResponse:
     env = _app_env()
-    env_titel = {
-        "dev": "AhDs Development Server",
-        "staging": "AhDs Staging Server",
-        "prod": "AhDs Production Server",
-    }.get(env, "Server")
-    major, minor, patch = _semver_aufloesen(_API_RELEASE)
     invocation = _utc_now().strftime("%Y-%m-%d %H:%M:%S")
-    started = _SERVER_STARTED_AT.strftime("%Y-%m-%d %H:%M:%S")
-    dev_days = (dt.date.today() - _SERVER_PROJECT_START).days
-    title_line = f"{env_titel} · v{_API_RELEASE} · {invocation} UTC"
-    host_update = _update_status_laden()
-    hu_checked_raw = str(host_update.get("checked_at") or "").strip()
-    hu_lokal, hu_utc = _host_letzter_lauf_anzeige(hu_checked_raw)
-    hu_lokal_e = html.escape(hu_lokal, quote=True)
-    hu_utc_e = html.escape(hu_utc, quote=True)
-    tz_label_e = html.escape(_ANZEIGE_TZ_NAME, quote=True)
-    poll_sec = _poll_intervall_sekunden(host_update)
-    poll_txt_e = html.escape(_poll_intervall_text(poll_sec), quote=True)
-    hu_next_iso = _naechste_poll_iso_zeile(host_update)
-    nxt_lokal_e = "—"
-    nxt_utc_e = "—"
-    if hu_next_iso:
-        tn = _iso_nach_utc_zeile(hu_next_iso)
-        if tn is not None:
-            nxt_lokal_e = html.escape(
-                tn.astimezone(_anzeige_zone()).strftime("%Y-%m-%d %H:%M:%S"),
-                quote=True,
-            )
-            nxt_utc_e = html.escape(
-                tn.astimezone(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
-                quote=True,
-            )
-    hu_status = html.escape(str(host_update.get("status", "") or "—"), quote=True)
-    hu_detail = html.escape(str(host_update.get("detail", "") or "—"), quote=True)
-    hu_sha = host_update.get("deployed_sha")
-    if not hu_sha:
-        hu_sha_str = "—"
-    else:
-        s_sha = str(hu_sha)
-        hu_sha_str = s_sha[:12] + "…" if len(s_sha) > 12 else s_sha
-    hu_sha_esc = html.escape(hu_sha_str, quote=True)
-    refresh_ms = _startseite_refresh_ms()
-    refresh_sek = max(1, refresh_ms // 1000)
-    next_poll_json = json.dumps(hu_next_iso or "")
+    title_line = f"AhDs Staging Server · v{_API_RELEASE} · {invocation} UTC"
     page_html = f"""<!doctype html>
 <html lang="de">
   <head>
@@ -932,64 +935,6 @@ def root() -> HTMLResponse:
         font-size: 0.88rem;
         letter-spacing: 0.02em;
       }}
-      .refresh-line {{
-        margin: 0 0 14px;
-        font-size: 0.82rem;
-        letter-spacing: 0.01em;
-      }}
-      .refresh-line .sep {{
-        margin: 0 0.35em;
-        opacity: 0.55;
-      }}
-      .host-meta {{
-        border: 1px solid #e8dfd0;
-        border-radius: 10px;
-        padding: 12px 14px 14px;
-        margin-bottom: 4px;
-        background: linear-gradient(180deg, #fffdfa 0%, #fff 100%);
-      }}
-      .host-meta-title {{
-        margin: 0 0 10px;
-        font-size: 0.72rem;
-        font-weight: 600;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #7a7368;
-      }}
-      .host-dl {{
-        margin: 0;
-        display: grid;
-        grid-template-columns: minmax(7.5rem, 9.2rem) 1fr;
-        gap: 6px 12px;
-        font-size: 0.88rem;
-        align-items: baseline;
-      }}
-      .host-dl dt {{
-        margin: 0;
-        color: var(--muted);
-        font-size: 0.82rem;
-      }}
-      .host-dl dd {{
-        margin: 0;
-        line-height: 1.4;
-      }}
-      .host-dl .mono {{
-        font-family: Consolas, "SF Mono", "Courier New", monospace;
-        font-size: 0.84rem;
-      }}
-      .countdown-wrap {{
-        margin-top: 12px;
-        padding-top: 10px;
-        border-top: 1px solid #ede5d8;
-      }}
-      .countdown-line {{
-        font-family: Consolas, "SF Mono", "Courier New", monospace;
-        font-size: 0.88rem;
-        letter-spacing: 0.04em;
-      }}
-      .countdown-line.countdown-late {{
-        color: #a85a28;
-      }}
     </style>
   </head>
   <body>
@@ -997,43 +942,13 @@ def root() -> HTMLResponse:
       <div class="card">
         <div class="titlebar">{html.escape(title_line)}</div>
         <h1>Anmeldung</h1>
-        <p class="page-sub muted">{html.escape(env_titel)} · API</p>
+        <p class="page-sub muted">AhDs Staging Server · API</p>
         <div>
           <span class="pill ok">Online</span>
           <span class="pill">{html.escape(env)}</span>
           <span class="pill">API v{_API_RELEASE}</span>
           <span class="pill">{_SERVER_UI_VERSION}</span>
         </div>
-        <p class="refresh-line muted" id="zeile-auto">
-          <span class="tabular">Intervall <strong id="txt-refresh-sek">{refresh_sek}</strong> s</span>
-          <span class="sep">·</span>
-          <span>Serverzeit <strong id="txt-stand-zeit" class="tabular">—</strong> UTC</span>
-        </p>
-        <section class="host-meta" id="kasten-updates" aria-label="Deployment-Status">
-          <h2 class="host-meta-title">Deployment-Status</h2>
-          <dl class="host-dl">
-            <dt>Letzter Lauf</dt>
-            <dd>
-              <span id="hu-ll" class="mono tabular">{hu_lokal_e}</span>
-              <span class="muted"> ({tz_label_e})</span><br />
-              <span id="hu-lu" class="mono tabular muted">UTC {hu_utc_e}</span>
-            </dd>
-            <dt>Prüfintervall</dt>
-            <dd><span id="hu-it" class="tabular">{poll_txt_e}</span></dd>
-            <dt>Nächste Prüfung</dt>
-            <dd>
-              <span id="hu-nl" class="mono tabular">{nxt_lokal_e}</span><br />
-              <span id="hu-nu" class="mono tabular muted">UTC {nxt_utc_e}</span>
-            </dd>
-            <dt>Ergebnis</dt>
-            <dd><span id="hu-st">{hu_status}</span> · <span id="hu-dt">{hu_detail}</span></dd>
-            <dt>Commit</dt>
-            <dd><code id="hu-sh">{hu_sha_esc}</code></dd>
-          </dl>
-          <div class="countdown-wrap">
-            <span id="update-countdown" class="countdown-line muted tabular" role="status" aria-live="polite" title="Relativ zur geplanten Prüfzeit (Host-Timer)"></span>
-          </div>
-        </section>
 
         <div class="grid">
           <section class="box loginbox">
@@ -1053,17 +968,9 @@ def root() -> HTMLResponse:
           </section>
           <section class="box">
             <h2>System</h2>
-            <div class="status-list">AhDs · Arbeitsstand
-Version: v{_API_RELEASE}
-Prozessstart (UTC): {started}
-Seitenaufruf (UTC): {invocation}
-Projektstart: {_SERVER_PROJECT_START.isoformat()}
-Laufzeit: {dev_days} Tage
-Umgebung: {env}
-
-SemVer: MAJOR {major} · MINOR {minor} · PATCH {patch}
-
-Aufrufzähler: Mj {_SERVER_COUNTER["major"]} · Mn {_SERVER_COUNTER["minor"]} · P {_SERVER_COUNTER["patch"]} · Σ {_SERVER_COUNTER["total"]}</div>
+            <div class="status-list">Umgebung: {env}
+API-Version: v{_API_RELEASE}
+UI-Version: {_SERVER_UI_VERSION}</div>
             <div class="smalllink muted" style="margin-top:10px;">
               <a href="/health">/health</a> · <a href="/ready">/ready</a> · <a href="/v1/meta/version">/v1/meta/version</a>
             </div>
@@ -1099,72 +1006,6 @@ Aufrufzähler: Mj {_SERVER_COUNTER["major"]} · Mn {_SERVER_COUNTER["minor"]} ·
         }}
       }});
 
-      (function startseiteAuto() {{
-        const REFRESH_MS = {refresh_ms};
-        let nextPollIso = {next_poll_json};
-        const elCd = document.getElementById("update-countdown");
-        const setz = (id, txt) => {{
-          const n = document.getElementById(id);
-          if (n) n.textContent = txt;
-        }};
-        function fmtDeltaSekunden(absSek) {{
-          const n = Math.max(0, Math.floor(absSek));
-          const h = Math.floor(n / 3600);
-          const m = Math.floor((n % 3600) / 60);
-          const s = n % 60;
-          const p = (x) => String(x).padStart(2, "0");
-          return h > 0 ? `${{h}}:${{p(m)}}:${{p(s)}}` : `${{p(m)}}:${{p(s)}}`;
-        }}
-        function countdownSchreiben() {{
-          if (!elCd) return;
-          const iso = (nextPollIso || "").trim();
-          if (!iso) {{
-            elCd.textContent = "Keine Planungsdaten.";
-            elCd.className = "countdown-line muted tabular";
-            return;
-          }}
-          const tNext = Date.parse(iso);
-          if (Number.isNaN(tNext)) {{
-            elCd.textContent = "—";
-            elCd.className = "countdown-line muted tabular";
-            return;
-          }}
-          const sec = Math.floor((tNext - Date.now()) / 1000);
-          if (sec > 0) {{
-            elCd.textContent = "T− " + fmtDeltaSekunden(sec);
-            elCd.className = "countdown-line muted tabular";
-          }} else {{
-            elCd.textContent = "T+ " + fmtDeltaSekunden(-sec);
-            elCd.className = "countdown-line tabular countdown-late";
-          }}
-        }}
-        async function datenHolen() {{
-          try {{
-            const res = await fetch("/status/aktuell", {{ cache: "no-store" }});
-            const j = await res.json();
-            const h = j.host_update || {{}};
-            nextPollIso = h.next_poll_at || "";
-            const st = j.serverzeit_utc;
-            setz("txt-stand-zeit", st ? String(st).replace(/Z$/, "") : "—");
-            setz("hu-ll", h.letzter_lauf_lokal || "—");
-            const lu = h.letzter_lauf_utc;
-            setz("hu-lu", lu && lu !== "—" ? "UTC " + lu : "—");
-            setz("hu-it", h.intervall_text || "—");
-            setz("hu-nl", h.naechste_pruefung_lokal || "—");
-            const nu = h.naechste_pruefung_utc;
-            setz("hu-nu", nu && nu !== "—" ? "UTC " + nu : "—");
-            setz("hu-st", String(h.status ?? "—"));
-            setz("hu-dt", String(h.detail ?? "—"));
-            setz("hu-sh", String(h.deployed_sha_kurz ?? "—"));
-            countdownSchreiben();
-          }} catch (e) {{
-            /* letzte gültige Anzeige beibehalten */
-          }}
-        }}
-        setInterval(countdownSchreiben, 1000);
-        setInterval(datenHolen, REFRESH_MS);
-        datenHolen();
-      }})();
     </script>
   </body>
 </html>
@@ -1173,15 +1014,50 @@ Aufrufzähler: Mj {_SERVER_COUNTER["major"]} · Mn {_SERVER_COUNTER["minor"]} ·
 
 
 @app.get("/admin")
-def admin_panel(authorization: str | None = Header(default=None)) -> HTMLResponse:
-    _admin_panel_auth_pruefen(authorization)
+def admin_login(request: Request) -> HTMLResponse | RedirectResponse:
+    if _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
+        return RedirectResponse(url="/admin/panel", status_code=303)
+    return HTMLResponse(content=_admin_login_html())
+
+
+@app.post("/admin/login")
+def admin_login_submit(
+    username: str = Form(default=""),
+    password: str = Form(default=""),
+) -> HTMLResponse | RedirectResponse:
+    if username.strip() != _ADMIN_PANEL_USER or password != _ADMIN_PANEL_PASSWORD:
+        return HTMLResponse(content=_admin_login_html(fehler="Benutzer oder Passwort falsch."), status_code=401)
+    rsp = RedirectResponse(url="/admin/panel", status_code=303)
+    secure_cookie = _app_env() == "prod"
+    rsp.set_cookie(
+        key=_ADMIN_SESSION_COOKIE,
+        value=_admin_session_token_erzeugen(_ADMIN_PANEL_USER),
+        httponly=True,
+        samesite="lax",
+        secure=secure_cookie,
+        max_age=_ADMIN_SESSION_TTL_SEC,
+    )
+    return rsp
+
+
+@app.post("/admin/logout")
+def admin_logout() -> RedirectResponse:
+    rsp = RedirectResponse(url="/admin", status_code=303)
+    rsp.delete_cookie(_ADMIN_SESSION_COOKIE)
+    return rsp
+
+
+@app.get("/admin/panel")
+def admin_panel(request: Request) -> HTMLResponse | RedirectResponse:
+    if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
+        return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()
     return HTMLResponse(content=_admin_form_html(env_daten=env_daten))
 
 
 @app.post("/admin/save")
 def admin_panel_save(
-    authorization: str | None = Header(default=None),
+    request: Request,
     staging_domain: str = Form(default=""),
     tls_email: str = Form(default=""),
     admin_email: str = Form(default=""),
@@ -1191,8 +1067,9 @@ def admin_panel_save(
     login_max: str = Form(default="5"),
     login_lock: str = Form(default="900"),
     reset_ttl: str = Form(default="1800"),
-) -> HTMLResponse:
-    _admin_panel_auth_pruefen(authorization)
+) -> HTMLResponse | RedirectResponse:
+    if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
+        return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()
     try:
         if not staging_domain.strip():
