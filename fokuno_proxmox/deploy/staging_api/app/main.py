@@ -966,15 +966,14 @@ def root() -> HTMLResponse:
         <div class="grid">
           <section class="box loginbox">
             <h2>Zugang</h2>
-            <form id="login-form">
+            <form method="post" action="/admin/login">
               <label>Benutzer:</label>
-              <input id="login-email" name="email" type="text" placeholder="E-Mail / Benutzer" />
+              <input name="username" type="text" placeholder="Admin" autocomplete="username" />
               <label>Passwort:</label>
-              <input id="login-password" name="password" type="password" placeholder="Passwort" />
+              <input name="password" type="password" placeholder="Passwort" autocomplete="current-password" />
               <div class="smalllink muted"><a href="#" onclick="alert('Noch nicht implementiert.'); return false;">Passwort vergessen</a></div>
               <button class="btn" type="submit">Anmelden</button>
             </form>
-            <div id="login-result" class="smalllink"></div>
             <div class="smalllink muted" style="margin-top:10px;">
               <a href="/docs">OpenAPI · /docs</a>
             </div>
@@ -992,33 +991,6 @@ UI-Version: {_SERVER_UI_VERSION}</div>
       </div>
     </div>
     <script>
-      const form = document.getElementById("login-form");
-      const result = document.getElementById("login-result");
-      form?.addEventListener("submit", async (ev) => {{
-        ev.preventDefault();
-        const email = document.getElementById("login-email")?.value || "";
-        const password = document.getElementById("login-password")?.value || "";
-        result.textContent = "Wird geprüft …";
-        try {{
-          const res = await fetch("/v1/auth/login", {{
-            method: "POST",
-            headers: {{
-              "content-type": "application/json",
-              "x-client-api-major": "{_API_MAJOR}"
-            }},
-            body: JSON.stringify({{ email, password }})
-          }});
-          const data = await res.json();
-          if (!res.ok) {{
-            result.textContent = "Fehlgeschlagen: " + (data.detail || res.status);
-            return;
-          }}
-          result.textContent = "OK · Zugriffstoken ausgestellt.";
-        }} catch (e) {{
-          result.textContent = "Fehlgeschlagen: " + String(e);
-        }}
-      }});
-
     </script>
   </body>
 </html>
