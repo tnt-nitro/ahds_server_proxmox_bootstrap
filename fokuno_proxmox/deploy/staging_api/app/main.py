@@ -356,6 +356,17 @@ def _admin_form_html(
     def esc(key: str, fallback: str = "") -> str:
         return html.escape(env_daten.get(key, fallback), quote=True)
 
+    def hilfe(key: str, name: str, text: str) -> str:
+        key_esc = html.escape(key, quote=True)
+        name_esc = html.escape(name)
+        text_esc = html.escape(text)
+        return (
+            f'<label>{name_esc} '
+            f'<button class="helpbtn" type="button" data-help="{key_esc}" '
+            f'aria-expanded="false" aria-controls="{key_esc}" title="Erklärung anzeigen">?</button></label>'
+            f'<div id="{key_esc}" class="helptext">{text_esc}</div>'
+        )
+
     meldung_html = (
         f'<div class="ok">{html.escape(meldung)}</div>' if meldung else ""
     )
@@ -381,6 +392,31 @@ def _admin_form_html(
     .err {{ margin: 10px 0; padding: 10px; border-radius: 8px; background: #fff1f1; border: 1px solid #e2abab; color: #8b2323; }}
     button {{ margin-top: 14px; background: #9f8a60; color: #fff; border: 0; border-radius: 8px; padding: 9px 14px; cursor: pointer; }}
     .hint {{ margin-top: 12px; color: #6f6b64; font-size: 0.92rem; }}
+    .helpbtn {{
+      margin-top: 0;
+      margin-left: 6px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      line-height: 20px;
+      background: #7f7254;
+      color: #fff;
+      vertical-align: middle;
+    }}
+    .helptext {{
+      display: none;
+      margin: 4px 0 8px;
+      padding: 8px 10px;
+      border: 1px solid #e6dbc6;
+      border-radius: 8px;
+      background: #f9f5ee;
+      color: #5f5a51;
+      font-size: 0.86rem;
+      line-height: 1.35;
+    }}
+    .helptext.show {{ display: block; }}
   </style>
 </head>
 <body>
@@ -393,39 +429,39 @@ def _admin_form_html(
       <form method="post" action="/admin/save">
         <div class="row">
           <div>
-            <label>STAGING_DOMAIN</label>
+            {hilfe("help-staging-domain", "STAGING_DOMAIN", "Domain der Staging-Seite, z. B. ahdsserver.duckdns.org. Wird für URL/TLS/Reverse-Proxy genutzt.")}
             <input name="staging_domain" value="{esc("STAGING_DOMAIN")}" />
           </div>
           <div>
-            <label>TLS_EMAIL</label>
+            {hilfe("help-tls-email", "TLS_EMAIL", "E-Mail für Let's Encrypt Ablaufhinweise. Sollte ein gültiges Postfach sein.")}
             <input name="tls_email" value="{esc("TLS_EMAIL")}" />
           </div>
         </div>
         <div class="row">
           <div>
-            <label>ADMIN_EMAIL</label>
+            {hilfe("help-admin-email", "ADMIN_EMAIL", "E-Mail für deinen App-Admin-Benutzer in der API (Rolle admin bei Registrierung/Login-Flow).")}
             <input name="admin_email" value="{esc("ADMIN_EMAIL")}" />
           </div>
           <div>
-            <label>DUCKDNS_TOKEN (optional)</label>
+            {hilfe("help-duckdns-token", "DUCKDNS_TOKEN (optional)", "Nur nötig, wenn DuckDNS-Updates vom Host automatisiert werden sollen. Sonst leer lassen.")}
             <input name="duckdns_token" value="{esc("DUCKDNS_TOKEN")}" />
           </div>
         </div>
-        <label>POSTGRES_PASSWORD (leer = unverändert)</label>
+        {hilfe("help-pg-password", "POSTGRES_PASSWORD (leer = unverändert)", "DB-Passwort für den API-Zugriff auf PostgreSQL. Nur setzen, wenn du das DB-Passwort wirklich ändern willst.")}
         <input type="password" name="postgres_password" value="" />
-        <label>API_TOKEN_SECRET (leer = unverändert)</label>
+        {hilfe("help-api-token-secret", "API_TOKEN_SECRET (leer = unverändert)", "Signierschlüssel für Access/Refresh-Tokens. Nur ändern, wenn du alle bestehenden Tokens ungültig machen willst.")}
         <input type="password" name="api_token_secret" value="" />
         <div class="row">
           <div>
-            <label>LOGIN_MAX_FEHLVERSUCHE</label>
+            {hilfe("help-login-max", "LOGIN_MAX_FEHLVERSUCHE", "Nach so vielen Fehlversuchen wird ein Login temporär gesperrt.")}
             <input name="login_max" value="{esc("LOGIN_MAX_FEHLVERSUCHE", "5")}" />
           </div>
           <div>
-            <label>LOGIN_SPERRE_SEKUNDEN</label>
+            {hilfe("help-login-lock", "LOGIN_SPERRE_SEKUNDEN", "Dauer der Sperre nach zu vielen Fehlversuchen in Sekunden.")}
             <input name="login_lock" value="{esc("LOGIN_SPERRE_SEKUNDEN", "900")}" />
           </div>
         </div>
-        <label>RESET_TOKEN_TTL_SEKUNDEN</label>
+        {hilfe("help-reset-ttl", "RESET_TOKEN_TTL_SEKUNDEN", "Gültigkeitsdauer für Passwort-Reset-Token in Sekunden.")}
         <input name="reset_ttl" value="{esc("RESET_TOKEN_TTL_SEKUNDEN", "1800")}" />
         <button type="submit">Werte speichern</button>
       </form>
@@ -451,6 +487,18 @@ Patch: {_SERVER_COUNTER["patch"]}
 Total: {_SERVER_COUNTER["total"]}</pre>
     </div>
   </div>
+<script>
+  document.querySelectorAll(".helpbtn").forEach((btn) => {{
+    btn.addEventListener("click", () => {{
+      const id = btn.getAttribute("data-help");
+      if (!id) return;
+      const box = document.getElementById(id);
+      if (!box) return;
+      const offen = box.classList.toggle("show");
+      btn.setAttribute("aria-expanded", offen ? "true" : "false");
+    }});
+  }});
+</script>
 </body>
 </html>"""
 
