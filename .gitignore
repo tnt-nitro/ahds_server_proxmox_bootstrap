@@ -205,3 +205,9 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Lokale Zugangsdaten/Notizen
+AhDs Server promox CT Login.txt
+
+# Separates privates Web-Repo (nicht im Hauptrepo verwalten)
+fokuno_web/
