@@ -23,17 +23,18 @@ from psycopg import Error as PsycopgError
 from psycopg.rows import dict_row
 
 # Sichtbare API-/Root-UI-Änderung: Semver-Patch + CHANGELOG-Eintrag nicht vergessen.
-app = FastAPI(title="AhDs Staging API", version="0.4.2")
+app = FastAPI(title="AhDs Staging API", version="0.4.3")
 _API_MAJOR = "v1"
 _API_RELEASE = app.version
 _API_COMPAT_POLICY = (
     "Innerhalb einer Major-Version keine Breaking Changes ohne neuen Major-Pfad."
 )
 _CLIENT_MAJOR_HEADER = "x-client-api-major"
-_SERVER_UI_VERSION = "ui-0.2.2"
+_SERVER_UI_VERSION = "ui-0.2.3"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _ADMIN_SESSION_COOKIE = "ahds_admin_session"
+_ADMIN_ALLOWED_HOST = (os.environ.get("AHDS_ADMIN_HOST") or "").strip().lower()
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
 _SERVER_PROJECT_START = dt.date(2026, 4, 4)
 _SERVER_STATUS_PATH = Path(
@@ -192,6 +193,22 @@ def _admin_session_pruefen(token: str | None) -> bool:
     if time.time() > exp:
         return False
     return user == _ADMIN_PANEL_USER
+
+
+def _request_host(request: Request) -> str:
+    roh = (request.headers.get("host") or "").strip().lower()
+    if not roh:
+        return ""
+    return roh.split(":", 1)[0].strip()
+
+
+def _admin_host_pruefen(request: Request) -> None:
+    # Wenn AHDS_ADMIN_HOST gesetzt ist, sind /admin* nur dort erreichbar.
+    if not _ADMIN_ALLOWED_HOST:
+        return
+    if _request_host(request) == _ADMIN_ALLOWED_HOST:
+        return
+    raise HTTPException(status_code=404, detail="Not Found")
 
 
 def _admin_login_html(*, fehler: str = "") -> str:
@@ -1048,6 +1065,7 @@ UI-Version: {_SERVER_UI_VERSION}</div>
 
 @app.get("/admin")
 def admin_login(request: Request) -> Response:
+    _admin_host_pruefen(request)
     if _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin/panel", status_code=303)
     return HTMLResponse(content=_admin_login_html())
@@ -1055,9 +1073,11 @@ def admin_login(request: Request) -> Response:
 
 @app.post("/admin/login")
 def admin_login_submit(
+    request: Request,
     username: str = Form(default=""),
     password: str = Form(default=""),
 ) -> Response:
+    _admin_host_pruefen(request)
     if username.strip() != _ADMIN_PANEL_USER or password != _ADMIN_PANEL_PASSWORD:
         return HTMLResponse(content=_admin_login_html(fehler="Benutzer oder Passwort falsch."), status_code=401)
     rsp = RedirectResponse(url="/admin/panel", status_code=303)
@@ -1074,7 +1094,8 @@ def admin_login_submit(
 
 
 @app.post("/admin/logout")
-def admin_logout() -> RedirectResponse:
+def admin_logout(request: Request) -> RedirectResponse:
+    _admin_host_pruefen(request)
     rsp = RedirectResponse(url="/admin", status_code=303)
     rsp.delete_cookie(_ADMIN_SESSION_COOKIE)
     return rsp
@@ -1082,6 +1103,7 @@ def admin_logout() -> RedirectResponse:
 
 @app.get("/admin/panel")
 def admin_panel(request: Request) -> Response:
+    _admin_host_pruefen(request)
     if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()
@@ -1101,6 +1123,7 @@ def admin_panel_save(
     login_lock: str = Form(default="900"),
     reset_ttl: str = Form(default="1800"),
 ) -> Response:
+    _admin_host_pruefen(request)
     if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()

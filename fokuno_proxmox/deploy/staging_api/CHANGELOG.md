@@ -1,5 +1,11 @@
 # API Changelog (Staging API)
 
+## 0.4.3
+
+- Adminzugang per Host trennbar: wenn `AHDS_ADMIN_HOST` gesetzt ist, sind `/admin*` nur auf diesem Host erreichbar (sonst 404)
+- Vorbereitung für Setup mit öffentlicher User-Domain + separater Admin-Subdomain (z. B. `fokunoserver.ahdsserver.duckdns.org`)
+- `_SERVER_UI_VERSION` auf `ui-0.2.3`
+
 ## 0.4.2
 
 - `/admin` zeigt jetzt nur noch den Login; das eigentliche Adminpanel liegt geschützt hinter Session unter `/admin/panel`

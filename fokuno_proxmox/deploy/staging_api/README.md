@@ -59,6 +59,8 @@ docker compose -f staging-compose.yml up -d
   (`STAGING_DOMAIN`, `TLS_EMAIL`, `ADMIN_EMAIL`, Limits, optionale Secrets).
 - Hinweis: Nach Änderungen an Secrets/DB-Werten den Service neu starten:
   `systemctl restart ahds-staging-api`
+- Optionaler Host-Schutz: `AHDS_ADMIN_HOST` setzen (z. B. `fokunoserver.ahdsserver.duckdns.org`).
+  Dann sind `/admin*` nur unter diesem Host erreichbar; auf anderen Hosts liefern diese Pfade `404`.
 
 ## Audit-Logs: Filter + Pagination
 
