@@ -34,7 +34,6 @@ _SERVER_UI_VERSION = "ui-0.2.2"
 _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _ADMIN_SESSION_COOKIE = "ahds_admin_session"
-_ADMIN_SESSION_TTL_SEC = int(os.environ.get("AHDS_ADMIN_SESSION_TTL_SEC", "43200"))
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
 _SERVER_PROJECT_START = dt.date(2026, 4, 4)
 _SERVER_STATUS_PATH = Path(
@@ -45,6 +44,20 @@ _UPDATE_STATUS_PATH = Path(
 )
 _SERVER_STARTED_AT = dt.datetime.now(dt.timezone.utc)
 _SERVER_COUNTER: dict[str, int] = {"major": 0, "minor": 0, "patch": 0, "total": 0}
+
+
+def _env_int(name: str, default: int, *, minimum: int = 1) -> int:
+    roh = (os.environ.get(name) or "").strip()
+    if not roh:
+        return max(minimum, default)
+    try:
+        wert = int(roh)
+    except ValueError:
+        return max(minimum, default)
+    return max(minimum, wert)
+
+
+_ADMIN_SESSION_TTL_SEC = _env_int("AHDS_ADMIN_SESSION_TTL_SEC", 43200, minimum=60)
 _DEPRECATED_PATHS: dict[str, dict[str, str]] = {
     "/v1/admin/logs": {
         "sunset": "Wed, 31 Dec 2026 23:59:59 GMT",
