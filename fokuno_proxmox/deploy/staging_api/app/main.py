@@ -35,6 +35,9 @@ _ADMIN_PANEL_USER = "Admin"
 _ADMIN_PANEL_PASSWORD = "x"
 _ADMIN_SESSION_COOKIE = "ahds_admin_session"
 _ADMIN_ALLOWED_HOST = (os.environ.get("AHDS_ADMIN_HOST") or "").strip().lower()
+_ADMIN_ALIAS_PATH = (
+    os.environ.get("AHDS_ADMIN_ALIAS_PATH") or "k9Qm4pZ7tL2v"
+).strip().strip("/")
 _RUNTIME_ENV_PATH = Path(os.environ.get("AHDS_RUNTIME_ENV_FILE", "/opt/ahds-native/.env"))
 _SERVER_PROJECT_START = dt.date(2026, 4, 4)
 _SERVER_STATUS_PATH = Path(
@@ -220,7 +223,7 @@ def _root_host_modus(request: Request) -> str:
     return "user"
 
 
-def _admin_login_html(*, fehler: str = "") -> str:
+def _admin_login_html(*, fehler: str = "", basis_pfad: str = "/admin") -> str:
     fehler_html = f'<div class="err">{html.escape(fehler)}</div>' if fehler else ""
     return f"""<!doctype html>
 <html lang="de">
@@ -247,7 +250,7 @@ def _admin_login_html(*, fehler: str = "") -> str:
       <h1>AhDs Admin</h1>
       <p>Anmeldung für den Adminbereich.</p>
       {fehler_html}
-      <form method="post" action="/admin/login">
+      <form method="post" action="{html.escape(basis_pfad)}/login">
         <label>Benutzer</label>
         <input name="username" autocomplete="username" />
         <label>Passwort</label>
@@ -378,6 +381,7 @@ def _admin_form_html(
     env_daten: dict[str, str],
     meldung: str = "",
     fehler: str = "",
+    basis_pfad: str = "/admin",
 ) -> str:
     def esc(key: str, fallback: str = "") -> str:
         return html.escape(env_daten.get(key, fallback), quote=True)
@@ -452,7 +456,7 @@ def _admin_form_html(
       <p>Zentraler Bereich für Staging-Einstellungen.</p>
       {meldung_html}
       {fehler_html}
-      <form method="post" action="/admin/save">
+      <form method="post" action="{html.escape(basis_pfad)}/save">
         <div class="row">
           <div>
             {hilfe("help-staging-domain", "STAGING_DOMAIN", "Domain der Staging-Seite, z. B. ahdsserver.duckdns.org. Wird für URL/TLS/Reverse-Proxy genutzt.")}
@@ -491,7 +495,7 @@ def _admin_form_html(
         <input name="reset_ttl" value="{esc("RESET_TOKEN_TTL_SEKUNDEN", "1800")}" />
         <button type="submit">Werte speichern</button>
       </form>
-      <form method="post" action="/admin/logout">
+      <form method="post" action="{html.escape(basis_pfad)}/logout">
         <button type="submit" style="margin-top: 10px; background: #6f6b64;">Abmelden</button>
       </form>
       <div class="hint">
@@ -1169,7 +1173,7 @@ def admin_login(request: Request) -> Response:
     _admin_host_pruefen(request)
     if _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin/panel", status_code=303)
-    return HTMLResponse(content=_admin_login_html())
+    return HTMLResponse(content=_admin_login_html(basis_pfad="/admin"))
 
 
 @app.post("/admin/login")
@@ -1180,7 +1184,13 @@ def admin_login_submit(
 ) -> Response:
     _admin_host_pruefen(request)
     if username.strip() != _ADMIN_PANEL_USER or password != _ADMIN_PANEL_PASSWORD:
-        return HTMLResponse(content=_admin_login_html(fehler="Benutzer oder Passwort falsch."), status_code=401)
+        return HTMLResponse(
+            content=_admin_login_html(
+                fehler="Benutzer oder Passwort falsch.",
+                basis_pfad="/admin",
+            ),
+            status_code=401,
+        )
     rsp = RedirectResponse(url="/admin/panel", status_code=303)
     secure_cookie = _app_env() == "prod"
     rsp.set_cookie(
@@ -1208,7 +1218,7 @@ def admin_panel(request: Request) -> Response:
     if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
         return RedirectResponse(url="/admin", status_code=303)
     env_daten = _runtime_env_laden()
-    return HTMLResponse(content=_admin_form_html(env_daten=env_daten))
+    return HTMLResponse(content=_admin_form_html(env_daten=env_daten, basis_pfad="/admin"))
 
 
 @app.post("/admin/save")
@@ -1262,6 +1272,7 @@ def admin_panel_save(
             content=_admin_form_html(
                 env_daten=env_daten,
                 fehler=f"Speichern fehlgeschlagen: {exc}",
+                basis_pfad="/admin",
             ),
             status_code=400,
         )
@@ -1270,6 +1281,132 @@ def admin_panel_save(
         content=_admin_form_html(
             env_daten=env_daten,
             meldung="Gespeichert. Für volle Wirkung bei Secrets/DB: Service neu starten.",
+            basis_pfad="/admin",
+        )
+    )
+
+
+@app.get(f"/{_ADMIN_ALIAS_PATH}")
+@app.get(f"/{_ADMIN_ALIAS_PATH}/")
+def admin_alias_entry(request: Request) -> Response:
+    """Versteckter Einstiegspfad für den bestehenden Admin-Flow."""
+    _admin_host_pruefen(request)
+    if _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
+        return RedirectResponse(url=f"/{_ADMIN_ALIAS_PATH}/panel", status_code=303)
+    return HTMLResponse(content=_admin_login_html(basis_pfad=f"/{_ADMIN_ALIAS_PATH}"))
+
+
+@app.post(f"/{_ADMIN_ALIAS_PATH}/login")
+def admin_alias_login_submit(
+    request: Request,
+    username: str = Form(default=""),
+    password: str = Form(default=""),
+) -> Response:
+    _admin_host_pruefen(request)
+    if username.strip() != _ADMIN_PANEL_USER or password != _ADMIN_PANEL_PASSWORD:
+        return HTMLResponse(
+            content=_admin_login_html(
+                fehler="Benutzer oder Passwort falsch.",
+                basis_pfad=f"/{_ADMIN_ALIAS_PATH}",
+            ),
+            status_code=401,
+        )
+    rsp = RedirectResponse(url=f"/{_ADMIN_ALIAS_PATH}/panel", status_code=303)
+    secure_cookie = _app_env() == "prod"
+    rsp.set_cookie(
+        key=_ADMIN_SESSION_COOKIE,
+        value=_admin_session_token_erzeugen(_ADMIN_PANEL_USER),
+        httponly=True,
+        samesite="lax",
+        secure=secure_cookie,
+        max_age=_ADMIN_SESSION_TTL_SEC,
+    )
+    return rsp
+
+
+@app.post(f"/{_ADMIN_ALIAS_PATH}/logout")
+def admin_alias_logout(request: Request) -> RedirectResponse:
+    _admin_host_pruefen(request)
+    rsp = RedirectResponse(url=f"/{_ADMIN_ALIAS_PATH}/", status_code=303)
+    rsp.delete_cookie(_ADMIN_SESSION_COOKIE)
+    return rsp
+
+
+@app.get(f"/{_ADMIN_ALIAS_PATH}/panel")
+def admin_alias_panel(request: Request) -> Response:
+    _admin_host_pruefen(request)
+    if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
+        return RedirectResponse(url=f"/{_ADMIN_ALIAS_PATH}/", status_code=303)
+    env_daten = _runtime_env_laden()
+    return HTMLResponse(
+        content=_admin_form_html(
+            env_daten=env_daten,
+            basis_pfad=f"/{_ADMIN_ALIAS_PATH}",
+        )
+    )
+
+
+@app.post(f"/{_ADMIN_ALIAS_PATH}/save")
+def admin_alias_panel_save(
+    request: Request,
+    staging_domain: str = Form(default=""),
+    tls_email: str = Form(default=""),
+    admin_email: str = Form(default=""),
+    duckdns_token: str = Form(default=""),
+    postgres_password: str = Form(default=""),
+    api_token_secret: str = Form(default=""),
+    login_max: str = Form(default="5"),
+    login_lock: str = Form(default="900"),
+    reset_ttl: str = Form(default="1800"),
+) -> Response:
+    _admin_host_pruefen(request)
+    if not _admin_session_pruefen(request.cookies.get(_ADMIN_SESSION_COOKIE)):
+        return RedirectResponse(url=f"/{_ADMIN_ALIAS_PATH}/", status_code=303)
+    env_daten = _runtime_env_laden()
+    try:
+        if not staging_domain.strip():
+            raise ValueError("STAGING_DOMAIN darf nicht leer sein.")
+        if not tls_email.strip():
+            raise ValueError("TLS_EMAIL darf nicht leer sein.")
+        if not admin_email.strip():
+            raise ValueError("ADMIN_EMAIL darf nicht leer sein.")
+        env_daten["STAGING_DOMAIN"] = staging_domain.strip()
+        env_daten["TLS_EMAIL"] = tls_email.strip()
+        env_daten["ADMIN_EMAIL"] = admin_email.strip().lower()
+        env_daten["DUCKDNS_TOKEN"] = duckdns_token.strip()
+        env_daten["LOGIN_MAX_FEHLVERSUCHE"] = str(int(login_max))
+        env_daten["LOGIN_SPERRE_SEKUNDEN"] = str(int(login_lock))
+        env_daten["RESET_TOKEN_TTL_SEKUNDEN"] = str(int(reset_ttl))
+        if postgres_password.strip():
+            env_daten["PGPASSWORD"] = postgres_password.strip()
+        if api_token_secret.strip():
+            env_daten["API_TOKEN_SECRET"] = api_token_secret.strip()
+        if "APP_ENV" not in env_daten:
+            env_daten["APP_ENV"] = _app_env()
+        if "PGHOST" not in env_daten:
+            env_daten["PGHOST"] = os.environ.get("PGHOST", "127.0.0.1")
+        if "PGPORT" not in env_daten:
+            env_daten["PGPORT"] = os.environ.get("PGPORT", "5432")
+        if "PGUSER" not in env_daten:
+            env_daten["PGUSER"] = os.environ.get("PGUSER", "ahds")
+        if "PGDATABASE" not in env_daten:
+            env_daten["PGDATABASE"] = os.environ.get("PGDATABASE", "ahds_staging")
+        _runtime_env_schreiben(env_daten)
+    except Exception as exc:
+        return HTMLResponse(
+            content=_admin_form_html(
+                env_daten=env_daten,
+                fehler=f"Speichern fehlgeschlagen: {exc}",
+                basis_pfad=f"/{_ADMIN_ALIAS_PATH}",
+            ),
+            status_code=400,
+        )
+
+    return HTMLResponse(
+        content=_admin_form_html(
+            env_daten=env_daten,
+            meldung="Gespeichert. Für volle Wirkung bei Secrets/DB: Service neu starten.",
+            basis_pfad=f"/{_ADMIN_ALIAS_PATH}",
         )
     )
 
