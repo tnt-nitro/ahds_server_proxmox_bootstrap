@@ -19,7 +19,7 @@ done
 
 TARGET_DIR="/opt/ahds"
 PRIVATE_REPO_SSH="git@github.com:tnt-nitro/fokuno.git"
-INSTALLER_REL="fokuno_proxmox/install_proxmox_ct_nodocker.sh"
+INSTALLER_REL="ahds_server_proxmox/install_proxmox_ct_nodocker.sh"
 
 echo "AhDs Proxmox Bootstrap"
 echo "======================"
