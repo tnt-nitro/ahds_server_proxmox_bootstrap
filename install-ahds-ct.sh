@@ -18,8 +18,27 @@ for cmd in git bash; do
 done
 
 TARGET_DIR="/opt/ahds"
-PRIVATE_REPO_SSH="git@github.com:tnt-nitro/fokuno.git"
+GITHUB_OWNER_DEFAULT="tnt-nitro"
+PRIVATE_REPO_DEFAULT="fokuno"
 INSTALLER_REL="ahds_server_proxmox/install_proxmox_ct_nodocker.sh"
+
+read -r -p "GitHub-Owner [${GITHUB_OWNER_DEFAULT}]: " GITHUB_OWNER_INPUT
+GITHUB_OWNER="${GITHUB_OWNER_INPUT:-${GITHUB_OWNER_DEFAULT}}"
+
+read -r -p "Privates Repo [${PRIVATE_REPO_DEFAULT}]: " PRIVATE_REPO_INPUT
+PRIVATE_REPO="${PRIVATE_REPO_INPUT:-${PRIVATE_REPO_DEFAULT}}"
+
+if [[ ! "${GITHUB_OWNER}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo "Ungueltiger GitHub-Owner: ${GITHUB_OWNER}" >&2
+  exit 1
+fi
+
+if [[ ! "${PRIVATE_REPO}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
+  echo "Ungueltiger Repo-Name: ${PRIVATE_REPO}" >&2
+  exit 1
+fi
+
+PRIVATE_REPO_SSH="git@github.com:${GITHUB_OWNER}/${PRIVATE_REPO}.git"
 
 echo "AhDs Proxmox Bootstrap"
 echo "======================"
