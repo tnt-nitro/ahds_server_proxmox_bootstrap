@@ -45,6 +45,7 @@ if [[ ! "${PRIVATE_REPO}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
 fi
 
 PRIVATE_REPO_SSH="git@github.com:${GITHUB_OWNER}/${PRIVATE_REPO}.git"
+PRIVATE_REPO_HTTPS="https://github.com/${GITHUB_OWNER}/${PRIVATE_REPO}.git"
 
 echo "AhDs Proxmox Bootstrap"
 echo "======================"
@@ -67,6 +68,23 @@ normalize_repo_url() {
 
 DESIRED_REPO_NORM="$(normalize_repo_url "${PRIVATE_REPO_SSH}")"
 
+clone_repo() {
+  # Versucht zuerst per SSH zu klonen, und faellt auf HTTPS zurueck.
+  # Das hilft, wenn auf dem Proxmox kein SSH-Deploy-Key eingerichtet ist.
+  local ssh_url="$1"
+  local https_url="$2"
+  local dest="$3"
+
+  rm -rf "${dest}"
+  if git clone "${ssh_url}" "${dest}"; then
+    return 0
+  fi
+
+  echo "SSH clone fehlgeschlagen, versuche HTTPS..." >&2
+  rm -rf "${dest}"
+  git clone "${https_url}" "${dest}"
+}
+
 if [[ -d "${TARGET_DIR}/.git" ]]; then
   echo "[1/3] Bestehendes Repo aktualisieren..."
   CURRENT_REPO_URL="$(git -C "${TARGET_DIR}" remote get-url origin 2>/dev/null || true)"
@@ -74,8 +92,7 @@ if [[ -d "${TARGET_DIR}/.git" ]]; then
 
   if [[ -n "${CURRENT_REPO_URL}" && "${CURRENT_REPO_NORM}" != "${DESIRED_REPO_NORM}" ]]; then
     echo "[1/3] Repo passt nicht (ist: ${CURRENT_REPO_URL}). Reclone: ${PRIVATE_REPO_SSH}"
-    rm -rf "${TARGET_DIR}"
-    git clone "${PRIVATE_REPO_SSH}" "${TARGET_DIR}"
+    clone_repo "${PRIVATE_REPO_SSH}" "${PRIVATE_REPO_HTTPS}" "${TARGET_DIR}"
   else
     git -C "${TARGET_DIR}" fetch --all --prune
     git -C "${TARGET_DIR}" checkout main
@@ -83,8 +100,7 @@ if [[ -d "${TARGET_DIR}/.git" ]]; then
   fi
 else
   echo "[1/3] Repo neu klonen..."
-  rm -rf "${TARGET_DIR}"
-  git clone "${PRIVATE_REPO_SSH}" "${TARGET_DIR}"
+  clone_repo "${PRIVATE_REPO_SSH}" "${PRIVATE_REPO_HTTPS}" "${TARGET_DIR}"
 fi
 
 INSTALLER=""
