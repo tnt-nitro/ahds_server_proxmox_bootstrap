@@ -85,7 +85,7 @@ clone_repo() {
 
   # Kein interaktives Username/Passwort anstoßen (sonst haengt es in unattended runs).
   # Wenn HTTPS wirklich frei ist, sollte es ohne Credentials funktionieren.
-  if GIT_TERMINAL_PROMPT=0 git clone "${https_url}" "${dest}"; then
+  if GIT_TERMINAL_PROMPT=0 GIT_ASKPASS=/bin/false git clone "${https_url}" "${dest}"; then
     return 0
   fi
 
