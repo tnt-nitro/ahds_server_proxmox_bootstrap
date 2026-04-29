@@ -81,9 +81,24 @@ else
   git clone "${PRIVATE_REPO_SSH}" "${TARGET_DIR}"
 fi
 
-INSTALLER="${TARGET_DIR}/${INSTALLER_REL}"
-if [[ ! -f "${INSTALLER}" ]]; then
-  echo "Installer nicht gefunden: ${INSTALLER}" >&2
+INSTALLER=""
+INSTALLER_CANDIDATES=(
+  "${TARGET_DIR}/${INSTALLER_REL}"
+  "${TARGET_DIR}/install_proxmox_ct_nodocker.sh"
+  "${TARGET_DIR}/deploy/proxmox/install_proxmox_ct_nodocker.sh"
+)
+for c in "${INSTALLER_CANDIDATES[@]}"; do
+  if [[ -f "${c}" ]]; then
+    INSTALLER="${c}"
+    break
+  fi
+done
+
+if [[ -z "${INSTALLER}" ]]; then
+  echo "Installer nicht gefunden. Erwartet u.a.:" >&2
+  for c in "${INSTALLER_CANDIDATES[@]}"; do
+    echo "  - ${c}" >&2
+  done
   exit 1
 fi
 
