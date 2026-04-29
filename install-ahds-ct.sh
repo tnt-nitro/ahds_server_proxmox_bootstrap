@@ -46,11 +46,35 @@ echo "Zielpfad: ${TARGET_DIR}"
 echo "Repo:     ${PRIVATE_REPO_SSH}"
 echo
 
+normalize_repo_url() {
+  # Vereinheitlicht git-URL-Formen für einen Vergleich.
+  # Beispiel:
+  #   git@github.com:owner/repo.git -> owner/repo
+  #   https://github.com/owner/repo.git -> owner/repo
+  local url="$1"
+  url="${url%.git}"
+  url="${url#https://github.com/}"
+  url="${url#git@github.com:}"
+  url="${url#ssh://git@github.com/}"
+  echo "$url"
+}
+
+DESIRED_REPO_NORM="$(normalize_repo_url "${PRIVATE_REPO_SSH}")"
+
 if [[ -d "${TARGET_DIR}/.git" ]]; then
   echo "[1/3] Bestehendes Repo aktualisieren..."
-  git -C "${TARGET_DIR}" fetch --all --prune
-  git -C "${TARGET_DIR}" checkout main
-  git -C "${TARGET_DIR}" pull --ff-only origin main
+  CURRENT_REPO_URL="$(git -C "${TARGET_DIR}" remote get-url origin 2>/dev/null || true)"
+  CURRENT_REPO_NORM="$(normalize_repo_url "${CURRENT_REPO_URL}")"
+
+  if [[ -n "${CURRENT_REPO_URL}" && "${CURRENT_REPO_NORM}" != "${DESIRED_REPO_NORM}" ]]; then
+    echo "[1/3] Repo passt nicht (ist: ${CURRENT_REPO_URL}). Reclone: ${PRIVATE_REPO_SSH}"
+    rm -rf "${TARGET_DIR}"
+    git clone "${PRIVATE_REPO_SSH}" "${TARGET_DIR}"
+  else
+    git -C "${TARGET_DIR}" fetch --all --prune
+    git -C "${TARGET_DIR}" checkout main
+    git -C "${TARGET_DIR}" pull --ff-only origin main
+  fi
 else
   echo "[1/3] Repo neu klonen..."
   rm -rf "${TARGET_DIR}"
