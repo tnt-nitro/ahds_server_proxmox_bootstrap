@@ -18,7 +18,7 @@ for cmd in git bash; do
 done
 
 TARGET_DIR="/opt/ahds"
-INSTALLER_REL="ahds_server_proxmox/install_proxmox_ct_nodocker.sh"
+INSTALLER_REL="install_proxmox_ct_nodocker.sh"
 
 read -r -p "GitHub-Owner: " GITHUB_OWNER_INPUT
 GITHUB_OWNER="${GITHUB_OWNER_INPUT}"
@@ -90,7 +90,9 @@ fi
 INSTALLER=""
 INSTALLER_CANDIDATES=(
   "${TARGET_DIR}/${INSTALLER_REL}"
+  "${TARGET_DIR}/ahds_server_proxmox/install_proxmox_ct_nodocker.sh"
   "${TARGET_DIR}/install_proxmox_ct_nodocker.sh"
+  "${TARGET_DIR}/ahds_server_proxmox/deploy/proxmox/install_proxmox_ct_nodocker.sh"
   "${TARGET_DIR}/deploy/proxmox/install_proxmox_ct_nodocker.sh"
 )
 for c in "${INSTALLER_CANDIDATES[@]}"; do
