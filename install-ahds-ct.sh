@@ -82,7 +82,30 @@ clone_repo() {
 
   echo "SSH clone fehlgeschlagen, versuche HTTPS..." >&2
   rm -rf "${dest}"
-  git clone "${https_url}" "${dest}"
+
+  # Kein interaktives Username/Passwort anstoßen (sonst haengt es in unattended runs).
+  # Wenn HTTPS wirklich frei ist, sollte es ohne Credentials funktionieren.
+  if GIT_TERMINAL_PROMPT=0 git clone "${https_url}" "${dest}"; then
+    return 0
+  fi
+
+  echo "HTTPS clone ohne Credentials fehlgeschlagen." >&2
+  echo "Falls das Repo privat ist: GitHub Token zum Klonen setzen." >&2
+  read -r -s -p "GitHub Token (nur Clone; leer = abbrechen): " GITHUB_TOKEN_INPUT
+  echo >&2
+
+  if [[ -z "${GITHUB_TOKEN_INPUT}" ]]; then
+    echo "Abgebrochen ohne Token." >&2
+    return 1
+  fi
+
+  # Token in der URL nutzen; aus Sicherheitsgründen nicht ausgeben.
+  # Für GitHub PAT funktioniert typischerweise x-access-token.
+  local token_url
+  token_url="https://x-access-token:${GITHUB_TOKEN_INPUT}@github.com/${GITHUB_OWNER}/${PRIVATE_REPO}.git"
+
+  rm -rf "${dest}"
+  git clone "${token_url}" "${dest}"
 }
 
 if [[ -d "${TARGET_DIR}/.git" ]]; then
