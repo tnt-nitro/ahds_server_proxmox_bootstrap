@@ -18,15 +18,21 @@ for cmd in git bash; do
 done
 
 TARGET_DIR="/opt/ahds"
-GITHUB_OWNER_DEFAULT="tnt-nitro"
-PRIVATE_REPO_DEFAULT="fokuno"
 INSTALLER_REL="ahds_server_proxmox/install_proxmox_ct_nodocker.sh"
 
-read -r -p "GitHub-Owner [${GITHUB_OWNER_DEFAULT}]: " GITHUB_OWNER_INPUT
-GITHUB_OWNER="${GITHUB_OWNER_INPUT:-${GITHUB_OWNER_DEFAULT}}"
+read -r -p "GitHub-Owner: " GITHUB_OWNER_INPUT
+GITHUB_OWNER="${GITHUB_OWNER_INPUT}"
+if [[ -z "${GITHUB_OWNER}" ]]; then
+  echo "GitHub-Owner darf nicht leer sein." >&2
+  exit 1
+fi
 
-read -r -p "Privates Repo [${PRIVATE_REPO_DEFAULT}]: " PRIVATE_REPO_INPUT
-PRIVATE_REPO="${PRIVATE_REPO_INPUT:-${PRIVATE_REPO_DEFAULT}}"
+read -r -p "Repo: " PRIVATE_REPO_INPUT
+PRIVATE_REPO="${PRIVATE_REPO_INPUT}"
+if [[ -z "${PRIVATE_REPO}" ]]; then
+  echo "Repo darf nicht leer sein." >&2
+  exit 1
+fi
 
 if [[ ! "${GITHUB_OWNER}" =~ ^[A-Za-z0-9_.-]+$ ]]; then
   echo "Ungueltiger GitHub-Owner: ${GITHUB_OWNER}" >&2
