@@ -226,3 +226,7 @@ AhDs_ideas/
 
 # Generierte Hilfe-HTML unter Infra-Karte (lokal rendern; Quellen sind .txt/.py)
 _gesperrt/infra_karte/*.html
+
+# Von origin/main übernommen (lokal generiert / nicht ins Repo)
+AGENTS.md
+PUSH_HILFE.txt
