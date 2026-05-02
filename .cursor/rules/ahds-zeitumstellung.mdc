@@ -1,0 +1,12 @@
+---
+description: AhDs – Sommer-/Winterzeit (DST) über zoneinfo
+globs: fokuno_programm/modules/zeitumstellung/**/*
+alwaysApply: false
+---
+
+# Zeitumstellung (AhDs)
+
+- **Logik:** `fokuno_programm/modules/zeitumstellung/berechnung.py` – `umstellung_am_tag(datum, zeitzone)` mit **Stdlib `zoneinfo`** (keine festen DE-Daten; EU/Berlin folgt aus IANA `tzdata`).
+- **Kalender:** horizontale gestrichelte Linie + Zeitleisten-Text in `kalender/tagesansicht.py`; Farbe `ZEITUMSTELLUNG_LINIE` in `theming/farben.py`.
+- **Locale:** Vorsätze `kalender.zeitumstellung_sommerzeit_prefix` / `kalender.zeitumstellung_winterzeit_prefix` in `locales/de|en|fr.py`.
+- **Standort:** Es gilt `StandortProfil.zeitzone` (z. B. `Europe/Berlin`); spätere Erweiterung zu einem breiteren „Zeitmodul“ bleibt möglich.

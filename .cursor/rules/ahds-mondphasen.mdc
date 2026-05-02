@@ -1,0 +1,11 @@
+---
+description: AhDs – Mondphase, Synode, Kalender-Zeitleiste
+globs: fokuno_programm/modules/mondphasen/**/*, fokuno_programm/modules/kalender/tagesansicht.py
+alwaysApply: false
+---
+
+# Mondphasen (`modules/mondphasen/`)
+
+- **Berechnung:** `mondphase_synode_anteil` / `mondphase_beleuchtungsanteil` in `berechnung.py` – synodische Periode ohne Extra-Pakete; Datum der **Unterkulmination** (lokaler Kalendertag) bestimmt die Phase für die Anzeige.
+- **Darstellung:** `mondscheibe_zeichnen` in `tk_scheibe.py` – Neumond schwarz, Vollmond/Terminatoren per Modulfarben (oft hell); dazwischen Terminator-Modell.
+- **Kalender:** Mond zuerst, **Unterkulminationszeit** danach mit `TEXT_UNTERKULMINATION` + `TEXT_UNTERKULMINATION_RAND` aus `kalender_farben()` (Umriss für Lesbarkeit auf hell und dunkel). Oberkulmination bleibt `TEXT_ZEIT`.

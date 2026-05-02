@@ -1,0 +1,42 @@
+---
+description: AhDs – Multi-Repo-Überblick (kein Monorepo), Phasen und Arbeitsweise
+alwaysApply: true
+---
+
+# Projekt AhDs
+
+- **Projektstart (nicht löschen):** Im Repo-Stamm liegt **`PROJEKTSTART.txt`** mit dem festgehaltenen Beginn (Samstag 04.04.2026, 21:31 Uhr, Celenus Kurklingin Bad Bergzabern). Diese Datei ist **dauerhafte Projekthistorie** und darf **nicht entfernt** werden. Bei Fragen nach dem Startdatum dort nachlesen bzw. exakt so wiedergeben.
+- **Name:** AhDs (fest; historisch aus Tippfehler, bewusst beibehalten).
+- **Zielbild:** Später App auf Android, Apple und Web; WLAN-Geräte angedacht; eigener Server auf Proxmox (Homeserver) für Tests und Web-Backend – **noch nicht** umsetzen.
+- **Jetzt:** Nur **`fokuno_programm`** befüllen und ausprobieren – große Spielwiese ohne festes App-Ziel. Die Plattform-Ordner (siehe unten) sind für später; **keine** produktive Implementierung dort, bevor die Phase explizit beginnt.
+
+## Repositories und Ordner — kein Monorepo
+
+**Es gibt kein AhDs-Monorepo auf GitHub.** Jedes Projekt hat ein **eigenes Remote** (eigener GitHub-Bereich), z. B.:
+
+- **`ahds_android`** — eigenes Repo  
+- **`ahds_apple`** — eigenes Repo  
+- **`ahds_proxmox_bootstrap`** — eigenes Repo (öffentlicher One-Liner-Pfad)  
+- **`ahds_server_proxmox`** — eigenes Repo (Deploy, API, Proxmox-Skripte)  
+- **`ahds_web`** — eigenes Repo  
+
+Die Ordner liegen unter **`script/`** (bzw. im gleichen Arbeitsbaum) **nur aus Komfort**: schnell zwischen Projekten wechseln, Konstanten, Namen und Zusammenhänge querlesen. Das ist eine **lokale Arbeitskopie-Ansicht**, **keine** gemeinsame Git-Historie über alle diese Bereiche.
+
+- **Haupt-Git** dieses Arbeitsbaums (`origin` am Ordner `script/`): derzeit u. a. **Bootstrap** + **`fokuno_programm`** und weitere versionierte Dateien — historisch gewachsen; streng genommen gehört `fokuno_programm` bis zur Web-Migration inhaltlich zu AhDs, technisch kann es später ein **eigenes Repo** bekommen oder bleiben, je nach Aufteilung.
+- **Eingebettete Klone** (eigenes `.git` im Unterordner, z. B. **`ahds_server_proxmox`**, **`ahds_web`**, **`ahds_proxmox_bootstrap`**): dort **`git pull` / `git push`** nur **im jeweiligen Ordner**, nicht vom Parent aus erwarten.
+- **`fokuno_programm`** bleibt bis **`ahds_web`** die Inhalte aufgenommen hat **erhalten**; danach kann der Ordner entfallen oder ausgelagert werden (bewusste Entscheidung).
+
+**Sauber nutzen**
+
+- **`AhDs.code-workspace`** (liegt in `script/`): öffnet die wichtigsten Bereiche als **getrennte Wurzeln** (ohne den ganzen `script/`-Baum doppelt einzublenden). Git-Zeilen pro Repo bleiben übersichtlich.
+- **Bootstrap, `.github`, `PROJEKTSTART.txt`, Root-`install-ahds-ct.sh`:** weiterhin den Ordner **`script/`** wie gewohnt öffnen oder darin arbeiten — der Workspace ersetzt das nicht vollständig, er ergänzt nur die Multi-Repo-Ansicht.
+- **Commits:** immer im passenden Repo-Verzeichnis bzw. der passenden Workspace-Wurzel (`git status` vorher).
+
+## Architektur-Denkweise
+
+- Alles als **Module** planen: klar begrenzt, austauschbar, ein- und ausschaltbar, durchsuchbar.
+- Keine voreilige Kopplung an spätere Plattformen; im Programmordner experimentieren.
+
+## Kommunikation im Code
+
+- Kommentare, Docstrings und fachliche Benennung: **Deutsch** (Erweiterung Englisch, Französisch usw. betrifft primär **UI-Texte** über das i18n-System, nicht zwingend Code-Kommentare).

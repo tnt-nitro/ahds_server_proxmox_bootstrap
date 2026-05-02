@@ -1,0 +1,12 @@
+---
+description: AhDs – Sonnenauf-/untergang, Dämmerung, Standort
+globs: fokuno_programm/modules/sonnenzeit/**/*, fokuno_programm/modules/kalender/tagesansicht.py
+alwaysApply: false
+---
+
+# Sonnenzeit (`modules/sonnenzeit/`)
+
+- **Berechnung:** Paket **astral** (siehe `requirements.txt`). Zivile Dämmerung (ca. 6°) für den Streifen; **nautische Dämmerung (12°)** separat über `nautische_daemmerung_am_tag` (`Depression.NAUTICAL`) für die kleinen Zeitleisten-Marken — keine Sonnenfinsternis, kein „astronomisch völlig dunkel“.
+- **Standort:** `StandortProfil` in `standort.py`; Default **Frankfurt am Main** (`standard_frankfurt_am_main`). Später GPS oder Nutzereingabe – nur dieses Profil anpassen/übergeben, nicht Astro-Logik in der UI verstreuen.
+- **Kalender:** Sonnenspalte in `Tagesansicht` zwischen **Uhrzeiten** und **Blatt**; Farbe aus `helligkeit_01` → `farbe_sonnenstreifen` (Schwarz ↔ Gelb, linear in der Dämmerung). Kleine Zeitleisten-Marken (immer **nur Uhrzeit** `HH:MM`): nautische Dämmerung, Sonnenauf-/untergang, Ober-/Unterkulmination. **Vorsätze** (Locale-Präfixe wie H·, n↑, Au·) nur mit `mit_sonnenzeit_vorsaetzen=True` bzw. `sonnenzeit_vorsaetze_setzen(True)`; Alias `nautische_zeitleisten_setzen` ruft dasselbe auf. **Oberkulmination:** Sonnen-Icon `tk_sonne.sonne_zeitleiste_zeichnen` hinter der Uhrzeit; Farben `ICON_SONNE_*` in `kalender_farben()`.
+- **Mitlauf-Zoom:** `t_top` / alle Schnittzeitpunkte **timezone-aware** in `Europe/Berlin` (bzw. `standort.zeitzone`), damit Vergleich mit astral-Zeiten und Sonnenstreifen konsistent ist.

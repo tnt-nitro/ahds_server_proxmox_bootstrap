@@ -1,0 +1,12 @@
+---
+description: AhDs – Normal- / Darkmode (globaler Schalter, Theming)
+globs: fokuno_programm/modules/theming/**/*
+alwaysApply: false
+---
+
+# Erscheinungsmodus
+
+- **Zuständigkeit:** `modules/theming/modus.py` – globaler Zustand (`Erscheinungsmodus.NORMAL` / `.DARK`). API: `setze_modus`, `toggle_modus`, `ist_darkmode`, `aktueller_modus`.
+- **Farben:** Nicht mehr fest `KalenderFarben.*` aus einem einzigen Klassenobjekt, sondern **`kalender_farben()`** aus `farben.py` – liefert `KalenderFarbenPaket` passend zum Modus. Hell- und Dunkelpalette als `_KALENDER_HELL` / `_KALENDER_DUNKEL` in `farben.py` pflegen; die Regel **ahds-farben** dokumentiert mindestens die **Normal**-Werte.
+- **Neue UI:** Moduswechsel soll die sichtbaren Widgets **auffrischen** (z. B. `Tagesansicht.darstellung_auffrischen()`), Fensterhintergrund ggf. `HINTERGRUND_FENSTER` aus `kalender_farben()` setzen.
+- **Persistenz** (gespeicherte Nutzerwahl): später z. B. unter `data/` – bis dahin reicht Prozesssitzung.

@@ -1,0 +1,35 @@
+---
+description: AhDs – zentrale Farbpalette (modulübergreifend; Spiegelung in Code)
+globs: fokuno_programm/**/*
+alwaysApply: false
+---
+
+# Farben (AhDs)
+
+**Ausführbare Quelle:** `fokuno_programm/modules/theming/farben.py` – Hell- und Dunkelpalette (`_KALENDER_HELL` / `_KALENDER_DUNKEL`), Zugriff zur Laufzeit immer über **`kalender_farben()`** (abhängig von `modus.ist_darkmode()`). Diese Tabelle = **Normalmodus** (Hell); Dunkelwerte parallel in `farben.py` pflegen. Regel **ahds-erscheinungsmodus** für den Modus-Schalter.
+
+## Kalender / Tagesansicht (`KalenderFarbenPaket`, Normal)
+
+| Feld | Hex | Verwendung |
+|------|-----|------------|
+| `HINTERGRUND_BLATT` | `#F7F4EF` | Kalenderblatt (Hauptfläche) |
+| `HINTERGRUND_ZEITLEISTE` | `#E8E4DC` | Linke Zeitleiste |
+| `HINTERGRUND_FENSTER` | `#EDE9E2` | Tk-Fensterhintergrund (Demo) |
+| `PHASE_WACH` | `#FFF0C2` | Wachphase (Sonne) |
+| `PHASE_SCHLAF` | `#D4E5F7` | Schlafphase (Mond) |
+| `REGELARBEIT_FLACHE` | `#C4E0A8` | Regelarbeitszeit |
+| `WEGEZEIT_FLACHE` | `#E2C77A` | Wegezeit |
+| `PAUSE_ARBEIT_FLACHE` | `#C9B8D9` | Arbeitspausen |
+| `TRENNLINIE` | `#C4BDB0` | Senkrechte Zeitleiste / Blatt |
+| `RASTER_STUNDE` | `#D9D4CA` | Stundenlinien |
+| `TEXT_ZEIT` | `#3D3A36` | Beschriftungen |
+| `TEXT_UNTERKULMINATION` | `#2D4A52` | Unterkulmination (über Mond), ruhiges Blaugrau |
+| `TEXT_UNTERKULMINATION_RAND` | `#F2EDE2` | Umriss derselben Zeit (Lesbarkeit auf schwarz/hell) |
+| `ICON_SONNE_FLAECE` | `#FFE082` | Sonnenhöchstand-Icon (Zeitleiste), Scheibe |
+| `ICON_SONNE_STRAHL` | `#D9A300` | Strahlen/Umriss desselben Icons |
+| `JETZT_ZEIGER` | `#C45C3E` | „Jetzt“-Zeiger |
+| `JETZT_ZEIGER_RAND` | `#8F3D2A` | Rand „Jetzt“-Zeiger |
+| `JETZT_BANNER_TEXT` | `#FFFFFF` | Text auf dem linken Jetzt-Bannerschild |
+| `ZEITUMSTELLUNG_LINIE` | `#C17817` (Hell) / `#E8A42C` (Dunkel) | DST-Markierung (gestrichelte Linie in der Tagesansicht) |
+
+Weitere Module: neue Farbfelder im `KalenderFarbenPaket` ergänzen und hier + Dunkelpalette spiegeln.

@@ -1,0 +1,11 @@
+---
+description: AhDs – Jetzt-Zeiger, linkes Bannerschild Datum/Uhrzeit
+globs: fokuno_programm/modules/kalender/tagesansicht.py, fokuno_programm/locales/*.py
+alwaysApply: false
+---
+
+# Jetzt-Bannerschild
+
+- **Zeichnung:** `Tagesansicht._zeichnen_jetzt_zeiger` – immer eine **dünne Linie** (1 px) von `x0` bis `x_rechts` auf dem Kalenderblatt. Optional **Bannerschild** nur so breit wie Text + Padding, beginnt bei `x0`, liegt über der Linie; Füllung `JETZT_ZEIGER`, Text `JETZT_BANNER_TEXT`. Ohne Banner nur die Linie. Statisch: `y_mitte` = aktuelle Zeit; Mitlauf: Band am oberen Rand, Linie in der Mitte des Bands.
+- **Einstellungen (Default alles an):** Konstruktor-Parameter `jetzt_bannerschild_anzeigen`, `jetzt_banner_wochentag`, `jetzt_banner_tag`, `jetzt_banner_monat`, `jetzt_banner_jahr`, `jetzt_banner_uhrzeit`; Laufzeit `jetzt_banner_einstellen(...)` + passende Properties.
+- **Locales:** Bannertext: `kalender.wochentag_lang.0`–`6` (ausgeschrieben), `kalender.monat_lang.1`–`12` (ausgeschrieben), `kalender.kw_prefix` + zweistellige **ISO-Kalenderwoche**; Tag mit Punkt nur in Locale `de`. Kurzformen `wochentag_kurz` / `monat_kurz` bleiben für andere UI (Zeitleiste).

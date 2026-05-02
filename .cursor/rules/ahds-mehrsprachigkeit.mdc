@@ -1,0 +1,15 @@
+---
+description: AhDs – Mehrsprachigkeit (i18n) ab Tag eins
+globs: fokuno_programm/**/*
+alwaysApply: false
+---
+
+# Mehrsprachigkeit (i18n)
+
+- **Keine** sichtbaren Nutzer-Strings direkt in UI/Prints hardcoden, die später übersetzt werden sollen – stattdessen **Schlüssel + Zugriff** über die Locale-Schicht (`locales/`).
+- Priorität der **Inhaltssprachen:** Deutsch → Englisch → Französisch; später u. a. Niederländisch, Italienisch, Polnisch, Spanisch, Japanisch, Russisch. **Dialekte** (z. B. Sächsisch, Bayrisch, Schweizerdeutsch, spielerische Varianten) nur als Erweiterung derselben Idee (eigene Locale-Einträge), nicht parallel ein zweites System erfinden.
+
+## Technisch
+
+- Konstanten und zentrale Zuordnung **Schlüssel → Text** pro Sprache; gemeinsame Schlüsselnamen über alle Sprachen identisch halten.
+- Fehlende Übersetzung: sinnvoll fallbacken (z. B. auf Deutsch), Verhalten im Code dokumentieren.

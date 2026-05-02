@@ -1,0 +1,23 @@
+---
+description: fokuno_programm – Einstieg, VERSION-Datei, Ordnerlayout
+globs: fokuno_programm/**/*
+alwaysApply: false
+---
+
+# fokuno_programm
+
+## Einstieg
+
+- Start nur über **`main.py`** im Stammordner `fokuno_programm/` (von dort aus ausführen).
+- **`VERSION`** liegt **ebenfalls im Stammordner** (neben `main.py`): **einzige Quelle** für die Versionsanzeige und Versionspflege innerhalb dieses Ordners. Format siehe Datei selbst; bei jeder Versionsänderung **Zeitstempel** mitpflegen.
+
+## Ordner
+
+- **`modules/`** – ausführbare Bausteine, Logik, Helfer (kein „alles in main.py“). Unterordner z. B. **`theming/`** (**ahds-farben**, **ahds-erscheinungsmodus**), **`sonnenzeit/`** (**ahds-sonnenzeit**), **`mondphasen/`** (**ahds-mondphasen**), **`zeitumstellung/`** (**ahds-zeitumstellung**, DST über IANA-Zonen), **`arbeitszeit/`**, **`wegezeit/`**, **`pausenzeit/`**, **`kalender_api/`** (**ahds-kalender-api**).
+- **`data/`** – lokale Daten, Fixtures, Beispieldateien (keine Versionslogik hier).
+- **`locales/`** – Übersetzungen und Sprach-Registry (siehe Regel Mehrsprachigkeit).
+- Der Stammordner bleibt **übersichtlich** (wenige Dateien: u. a. `main.py`, `VERSION`).
+
+## Module
+
+- Neue Ideen als **eigenes Modul** unter `modules/` mit klarer Verantwortung; `main.py` nur orchestrieren und Einhängepunkte zeigen.

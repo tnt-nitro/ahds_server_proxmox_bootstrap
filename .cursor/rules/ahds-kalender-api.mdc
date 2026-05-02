@@ -1,0 +1,41 @@
+---
+description: AhDs – Kalender-API (externe Anbieter, Import/Export, Aufbau)
+globs: fokuno_programm/modules/kalender_api/**/*
+alwaysApply: false
+---
+
+# Kalender-API (`modules/kalender_api/`)
+
+## Zuständigkeit
+
+- **Alle** geplanten Zugriffe auf **fremde Kalender** (lesen/schreiben, Sync, Dateiformate) laufen über dieses Paket – **nicht** verstreut in `kalender/`, UI oder zufälligen Hilfsmodulen.
+- Gemeinsames Domänenmodell: **`KalenderEreignis`** und Erweiterungen in **`typen.py`**. Anbieter-spezifische Felder: später eigene Erweiterungsstruktur oder Mapping-Schicht, nicht die UI vollballastieren.
+
+## Schnittstelle
+
+- Abstraktion: **`KalenderAnbieter`** in **`schnittstelle.py`**. Konkrete Implementierungen nur unter **`anbieter/`** (eine Datei pro Ökosystem, wo sinnvoll).
+- **`KalenderAnbieterPlatzhalter`**: Stubs bis zur Implementierung; bei Aufruf klarer `NotImplementedError` mit Verweis auf diese Regel.
+
+### Zeitraum bei `ereignisse_holen(von, bis)` (Pflicht für alle Anbieter)
+
+- `von` / `bis` = **Kalendertage, beide inklusiv** („welche Tage“).
+- Abfragefenster lokal (bzw. dokumentierte TZ): von **00:00** an `von` bis **exklusiv** Mitternacht **nach** `bis` (also Beginn des Folgetags nach `bis`).
+- Rückgabe: alle Ereignisse, die dieses **halboffene** Fenster **überlappen** (`start < fenster_ende_exklusiv` und `ende > fenster_start`). Details und Beispiele im Modul-Docstring von **`schnittstelle.py`**.
+
+## Technische Leitplanken (wenn es soweit ist)
+
+- **Austauschformat:** wo möglich **iCalendar (RFC 5545)** bzw. **CalDAV** als Referenz (Thunderbird, viele Server, teils Apple/iCloud). Nicht jedes Ziel spricht CalDAV (z. B. **Google/Outlook** eher REST-APIs, **Alexa** über Skills/Amazon-eigene Wege).
+- **Auth:** OAuth 2.0 / Dienstkonten nur nach **Dokumentation des Anbieters**; **Tokens und Secrets** nie ins Repo – Umgebungsvariablen oder lokale, ignorierte Konfiguration unter `data/` o. Ä.
+- **Rechtliches / Kontingente:** Nutzungsbedingungen und Rate-Limits der jeweiligen APIs beachten; Nutzerzustimmung für Zugriff dokumentierbar halten.
+
+## Anbieter (Orientierung)
+
+| Richtung | Typische Wege |
+|----------|----------------|
+| Google Calendar | Google Calendar API, OAuth |
+| Outlook / Microsoft 365 | Microsoft Graph (Kalender) |
+| Thunderbird | CalDAV, lokale/remote `.ics`, Erweiterungen |
+| Amazon Alexa | Alexa Skills Kit, verknüpfte Kalenderquellen |
+| Apple | EventKit (Plattform), CalDAV (iCloud), ggf. weitere Apple-APIs |
+
+Neue Ziele: eigene Datei unter **`anbieter/`**, hier in der Regel kurz ergänzen.

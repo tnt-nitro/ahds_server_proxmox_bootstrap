@@ -219,8 +219,10 @@ _gesperrt/infra_karte/daten.json
 # Eingebettete Repos (eigenes Remote auf GitHub — nicht doppelt im Parent versionieren)
 ahds_server_proxmox/
 
-# Cursor / lokale IDE & Notizen
-.cursor/
+# Cursor: lokale Daten ignorieren, aber Regeln fürs Team versionieren
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**
 AhDs_ideas/
 .vscode/
 
