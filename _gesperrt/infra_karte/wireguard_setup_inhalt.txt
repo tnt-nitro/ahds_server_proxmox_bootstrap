@@ -1,0 +1,156 @@
+AhDs: WireGuard — VPN ins Heimnetz und Admin-Zugang vorbereiten
+================================================================
+
+Diese Seite ist die Arbeitsanleitung. Kurzfakten und URLs stehen in daten.json
+(Abschnitte staging_api_web und wireguard); nach jedem Schritt Infra-Karte und
+wireguard_setup_inhalt.txt anpassen, dann render_infra_karte.bat ausführen.
+
+Ziel
+----
+- Smartphone oder Laptop verbindet sich per WireGuard mit dem Heimnetz (oder nur mit ausgewählten Zielen).
+- Später: Web-Admin (Alias-Pfad unter staging_api_web) über Nginx/NPM nur aus vertrauenswürdigen Quellen — ohne VPN z. B. 404 (Umsetzung in NPM Advanced / eigene Snippets; hier nur vorbereiten).
+
+Voraussetzungen — erst verstehen, dann entscheiden
+--------------------------------------------------
+
+Was WireGuard bei dir „macht“ (ohne Fachidiom)
+----------------------------------------------
+WireGuard ist nur ein verschlüsselter Tunnel. Am Ende eines funktionierenden Tunnels
+soll der Computer oder das Handy so tun, als läge er **im Heimnetz** (oder erreicht
+wenigstens ausgewählte Ziele dort). Ob dieser Tunnel **über die FritzBox** läuft oder
+**auf einem eigenen Server** (Proxmox), ist eine zweite Frage — beides kann gehen,
+aber du musst nicht zwingend „noch einmal“ WireGuard auf Proxmox einrichten, wenn die
+FritzBox dich schon ins LAN bringt.
+
+Was du in der FritzBox siehst (zwei Einträge + Schlüssel)
+---------------------------------------------------------
+Du hast zwei genannte Verbindungen, jeweils mit einer Adresse wie 192.168.178.204/32
+und 192.168.178.201/32 und sichtbaren Schlüsseln.
+
+- Die **Namen** (tpttravel, tntsmart) sind frei wählbar — oft merkt man sich daran,
+  wofür die Verbindung gedacht war (z. B. Reise-Handy vs. „Smart“-Profil).
+- **/32** bedeutet: genau **eine** Adresse aus dem Heimnetzbereich ist diesem Tunnel
+  fest zugeordnet (wie ein einzelner „Platz“ im 192.168.178.x-Netz für dieses VPN).
+  Das ist normal und kein Fehler.
+- **Schlüssel in der FritzBox** gehören zu dieser Verbindung — sie sind geheim.
+  Niemals in Chat, Screenshots ins Repo oder in daten.json kopieren. Nur in der
+  FritzBox / in der WireGuard-App auf dem Gerät lassen.
+
+Am Smartphone hast du **tntsmart** mit An/Aus — das ist sehr wahrscheinlich genau
+**dieser eine Tunnel**: aus = du bist „nicht im VPN“, an = die FritzBox baut den Weg
+von unterwegs ins Heimnetz (sofern Internet da ist).
+
+Warum du dich an den Zweck nicht erinnerst — und das okay ist
+--------------------------------------------------------------
+Sehr typisch: einmal eingerichtet, dann Monate nicht genutzt. Halbwissen ist hier nicht
+„gefährlich“, solange du **nichts löschst**, solange du unsicher bist, und Keys nicht
+verstreust. Wir dokumentieren jetzt nach und klären nur mit **Lesen** in der FritzBox
+(ohne Umbau), was welcher Eintrag ist.
+
+Die wichtigste Zwischenfrage (bevor „Host / LXC / VM“)
+------------------------------------------------------
+**Brauchst du überhaupt ein zweites WireGuard auf dem Proxmox?**
+
+- **Nein / vorerst nicht**, wenn: Handy-VPN an → du kannst Dienste im Heimnetz
+  erreichen (z. B. interne IP des NPM oder Proxmox-Web). Dann reicht für AhDs
+  vorerst: **VPN = FritzBox-Lösung**, und später schränken wir nur noch den **Admin-
+  Web-Pfad** per NPM ein (anderes Kapitel).
+- **Ja, später**, wenn du z. B. unabhängig von der FritzBox-Software sein willst,
+  mehrere Standorte sauber trennen willst, oder der Tunnel **nicht** über AVM laufen
+  soll. Dann entscheiden wir **Host vs. LXC vs. VM** (siehe unten).
+
+Notiere deinen Stand (nur Fakten, keine Keys)
+----------------------------------------------
+[ ] Ich nutze am Handy das Profil „tntsmart“ — das ist mein aktueller Heimnetz-Tunnel.
+[ ] Zweiter Eintrag „tpttravel“: Zweck mir unklar — nur dokumentieren, nicht löschen.
+    Kurz-Notiz (frei): _______________________________________________
+
+    Vorläufige Vermutung (zum Abhaken, wenn du es geprüft hast):
+    [ ] zweites Gerät / alter Tunnel   [ ] Reserve   [ ] weiß ich noch nicht
+
+Wenn die FritzBox-VPN reicht: „Host / LXC / VM“ ist keine Sofort-Entscheidung
+-----------------------------------------------------------------------------
+Die Checkbox „WireGuard auf Proxmox-Host, LXC oder VM“ aus älteren Stichpunkten
+meint nur: **eigenes** WireGuard **auf dem Server** installieren. **Das kannst du
+weglassen**, solange der Zugang ins Heimnetz über die FritzBox und dein Handy-Profil
+reicht. In daten.json kannst du dann z. B. schreiben: „VPN-Zugang über FritzBox-
+WireGuard (Profil tntsmart); kein separates WG auf Proxmox nötig.“
+
+Falls du später doch ein eigenes WireGuard auf Proxmox willst — Kurzvergleich
+-------------------------------------------------------------------------------
+Das ist die Erklärung zu den drei Optionen (erst lesen, wenn du sie wirklich brauchst):
+
+- **Proxmox-Host (direkt):** WireGuard läuft auf dem Hypervisor selbst. Wenig
+  Komplexität, ein Ort für die Konfiguration. Nachteil: Fehler bei Netzwerk-Themen
+  betreffen den ganzen Host — du solltest wissen, was du tust.
+- **LXC (Container):** Eigener kleiner Linux-Kasten nur für VPN/Routing. Gut isoliert,
+  leicht zu sichern und zu sichern. Typisch, wenn „nur WireGuard“ als Dienst laufen
+  soll ohne den Host anzufassen.
+- **VM:** Volle virtuelle Maschine — meist Overkill nur für WireGuard, eher wenn du
+  sowieso eine VM für andere Gründe hast.
+
+Solange du mit der FritzBox ins LAN kommst, ist **keine** dieser drei Varianten
+Pflicht für AhDs.
+
+Port und FritzBox (nur wenn du **eigenes** WG auf einem Gerät im LAN betreibst)
+--------------------------------------------------------------------------------
+Dann: UDP-Port (oft 51820) von außen zur **IP dieses Geräts** freigeben. Wenn der Tunnel
+**nur über die FritzBox** als VPN-Endpunkt läuft, regelt die FritzBox das intern — dann
+ist dieser Satz für dich erstmal **Hintergrund**, nicht heute zu erledigen.
+
+Keys — immer noch gleich
+-------------------------
+Private Keys und Preshared Keys niemals in daten.json, git oder öffentliche Repos —
+nur lokal, Passwortmanager oder geheimnisse.json (lokal).
+
+Schritt 1 — Installation auf dem Server (nur wenn du eigenes WireGuard auf Proxmox willst)
+-------------------------------------------------------------------------------------------
+Wenn du **nur** die FritzBox und das Handy-Profil nutzt: diesen Schritt **vorerst
+überspringen** und bei „Schritt 7 — Tests“ mit VPN an/aus beginnen.
+
+[ ] wireguard / wireguard-tools / wg-quick (Distribution beachten: Proxmox = Debian-ähnlich; im CT ggf. anders)
+[ ] Dienst nach Neustart starten (systemd: wg-quick@wg0, oder äquivalent)
+
+Schritt 2 — Interface, IP-Bereich, Server-IP
+-------------------------------------------
+- Interface-Name (Beispiel): wg0
+- Internes WireGuard-Subnetz (Beispiel): 10.7.0.0/24
+- Server hat auf wg0 z. B. 10.7.0.1/24
+- Trage die gewählten Werte in daten.json (wireguard) ein, sobald fest.
+
+Schritt 3 — Schlüssel (Server + mindestens ein Client)
+------------------------------------------------------
+- Server: Private Key / Public Key erzeugen (wg genkey, wg pubkey)
+- Client (Handy): WireGuard-App — Schlüssel in der App oder über QR-Code aus Konfiguration
+- AllowedIPs auf dem Client: mindestens Heimnetz (z. B. 192.168.178.0/24) wenn Admin/NPM nur intern erreichbar sein soll; DNS optional getrennt dokumentieren
+
+Schritt 4 — NAT / Forwarding ins LAN
+------------------------------------
+- Damit VPN-Clients Geräte im Heimnetz (NPM, API-CT) erreichen: IP-Weiterleitung und Masquerading auf dem WireGuard-Host (iptables/nft oder sysctl net.ipv4.ip_forward=1).
+- Test vom Client: Ping zur Fritzbox oder zur NPM-IP (aus daten.json / proxmox).
+
+Schritt 5 — Firewall / Fritzbox
+-------------------------------
+- Nur UDP-Port WireGuard zum WireGuard-Host weiterleiten (externer Port kann von 51820 abweichen — dann in Client-Konfig und hier notieren).
+- Keine unnötigen zusätzlichen Portfreigaben.
+
+Schritt 6 — Nginx Proxy Manager (später, wenn Basis-VPN steht)
+--------------------------------------------------------------
+- Ziel: Admin-Pfad (staging_api_web.standard_alias_pfad) nur für Clients mit Quell-IP aus WireGuard-Subnetz oder nur über interne Auflösung — Konkretes Snippet dokumentieren, wenn umgesetzt.
+- Ohne passende Regel: return 404 für den Admin-Pfad (kein Hinweis auf „Login hier“).
+
+Schritt 7 — Tests
+-----------------
+1. VPN aus: öffentliche Admin-URL — gewünschtes Verhalten nach Umsetzung (z. B. 404 oder bestehendes Verhalten bis NPM angepasst ist).
+2. VPN ein: gleiche URL oder interne URL — Panel erreichbar.
+
+Referenz & Links (extern)
+-------------------------
+https://www.wireguard.com/
+https://www.wireguard.com/quickstart/
+https://www.wireguard.com/install/
+
+Stand / Pflege
+--------------
+Infra-Karte Abschnitt „WireGuard (VPN)“ mit Status und konkreten IPs pflegen.
+Keys nie einchecken.

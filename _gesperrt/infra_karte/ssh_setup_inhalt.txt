@@ -1,0 +1,124 @@
+Proxmox: SSH-Zugriff fuer GitHub Deploy Key (read-only)
+=========================================================
+
+Ziel
+----
+Der Proxmox-Host soll das private Repo ueber SSH klonen/lesen koennen, ohne dass du waehrend des Bootstrap-Prozesses manuell Passwoerter eingeben musst.
+
+Wiederholbar pruefbar ist das mit:
+`git ls-remote git@github.com:tnt-nitro/ahds_server_proxmox.git`
+
+Wichtig
+--------
+- Keine Keys ins Git committen.
+- Der private Key bleibt auf dem Proxmox (z. B. unter `/root/.ssh/`).
+- In GitHub fuegst du **nur den Public Key** als Deploy Key hinzu (read-only).
+
+Schritt 0: Parameter (ersetzen)
+--------------------------------
+Du nutzt hier dieselben Werte wie beim Bootstrap-Prompt:
+- `OWNER` = GitHub-Owner (z. B. `tnt-nitro`)
+- `REPO`  = Repo-Name (z. B. `ahds_server_proxmox`)
+
+Schritt 1: SSH-Key auf dem Proxmox erzeugen
+--------------------------------------------
+1. Als root auf dem Proxmox:
+   ```bash
+   mkdir -p /root/.ssh
+   chmod 700 /root/.ssh
+   ```
+
+2. Key erzeugen (ed25519, ohne Passphrase):
+   ```bash
+   ssh-keygen -t ed25519 -C "ahds_server_proxmox" -f /root/.ssh/ahds_server_proxmox_ed25519 -N ""
+   chmod 600 /root/.ssh/ahds_server_proxmox_ed25519
+   chmod 644 /root/.ssh/ahds_server_proxmox_ed25519.pub
+   ```
+
+3. Optional: sicherstellen, dass Git immer diesen Key nutzt:
+   ```bash
+   cat > /root/.ssh/config <<'EOF'
+   Host github.com
+     IdentityFile /root/.ssh/ahds_server_proxmox_ed25519
+     IdentitiesOnly yes
+   EOF
+   chmod 600 /root/.ssh/config
+   ```
+
+Schritt 2: Public Key in GitHub als Deploy Key hinterlegen
+-----------------------------------------------------------
+1. Im Browser oeffnen (nicht in der Shell ausfuehren):
+   `https://github.com/tnt-nitro/ahds_server_proxmox`
+   (falls du spaeter mit anderem Owner/Repo arbeitest: URL entsprechend anpassen)
+
+2. Im Repo:
+   `Settings` -> `Deploy keys` -> `Add deploy key`
+   Direktlink:
+   `https://github.com/tnt-nitro/ahds_server_proxmox/settings/keys`
+
+3. Titel:
+   z. B. `ahds-server-proxmox`
+
+4. Public Key eintragen:
+   - Inhalt von:
+     ```bash
+     cat /root/.ssh/ahds_server_proxmox_ed25519.pub
+     ```
+   - in das GitHub Textfeld einfuegen.
+   - Erwartetes Format im Feld (eine Zeile):
+     `ssh-ed25519 AAAA... ahds_server_proxmox`
+   - **Nicht** einfügen:
+     - `The key fingerprint is: SHA256...`
+     - Randomart-Block
+     - Private Key ohne `.pub`
+
+5. „Read-only“ aktivieren.
+6. Save / Add.
+
+Schritt 3: Test auf dem Proxmox (entscheidend)
+----------------------------------------------
+Bitte **testen** bevor du den One-Liner startest:
+```bash
+git ls-remote git@github.com:tnt-nitro/ahds_server_proxmox.git
+```
+Falls du spaeter Owner/Repo wechselst, den Befehl entsprechend anpassen:
+`git ls-remote git@github.com:<OWNER>/<REPO>.git`
+Wenn alles passt, siehst du Output wie „HEAD … refs/heads/main“ (oder aehnlich). Wenn es fehlschlaegt, bitte:
+- Deploy Key wirklich am richtigen Repo hinzugefuegt?
+- read-only ausgewahlt?
+- Key stimmt (Public Key kopiert / /root/.ssh/config stimmt)?
+
+Schritt 4: Erst danach Bootstrap One-Liner starten
+---------------------------------------------------
+Wenn `git ls-remote ...` klappt:
+1. `rm -rf /opt/ahds` (nur wenn du sicher neu starten willst)
+2. One-Liner:
+   ```bash
+   bash -c "$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/ahds_server_proxmox_bootstrap/main/install-ahds-ct.sh)"
+   ```
+
+Schritt 5: SSH-Deploy Key wieder entfernen (Reset)
+---------------------------------------------------
+Wenn du das komplette Setup spaeter noch einmal „von vorne“ ueben willst:
+
+1. Auf GitHub (im Browser oeffnen):
+   `https://github.com/tnt-nitro/ahds_server_proxmox/settings/keys`
+   (falls du spaeter mit anderem Owner/Repo arbeitest: URL entsprechend anpassen)
+   - `Settings` -> `Deploy keys`
+   - Den Eintrag mit dem Titel (z. B. `ahds-server-proxmox`) **löschen**
+
+2. Auf dem Proxmox (als root):
+   ```bash
+   rm -f /root/.ssh/ahds_server_proxmox_ed25519 /root/.ssh/ahds_server_proxmox_ed25519.pub
+   # Optional: Eintrag aus /root/.ssh/config entfernen oder die Datei loeschen,
+   # falls sie nur fuer diesen Key verwendet wurde.
+   ```
+
+3. Pruefen, dass kein SSH-Zugriff mehr funktioniert:
+   ```bash
+   git ls-remote git@github.com:tnt-nitro/ahds_server_proxmox.git
+   ```
+   (bei anderem Owner/Repo entsprechend anpassen)
+   Erwartung: Fehler (kein Zugriff mehr) – damit bist du wieder im „frischen“ Zustand fuer einen neuen Durchlauf.
+
+

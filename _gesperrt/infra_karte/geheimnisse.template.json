@@ -1,0 +1,15 @@
+{
+  "_hinweis": "Datei nach geheimnisse.json kopieren (liegt in .gitignore). Bearbeiten nur im Editor oder mit geheimnisse_eintragen.py — nicht in daten.json.",
+  "_wo_braucht_man_den_token": "Derselbe GitHub Personal Access Token wird typischerweise für git über HTTPS (push/pull), optional für die GitHub CLI (gh), und vom Git Credential Manager zwischengespeichert. Ein Token pro Maschine reicht oft; Deploy Keys auf dem Proxmox sind ein anderes Konzept (SSH, nur für git clone dort).",
+  "telegram_healthcheck": {
+    "bot_token": "",
+    "chat_id": ""
+  },
+  "eintraege": [
+    {
+      "bezeichnung": "Beispiel: GitHub PAT Workstation",
+      "token": "",
+      "wo_verwendet": "HTTPS Remote auf dieser Windows-Kiste; Cursor/Git nutzen denselben Credential Store nach erstem erfolgreichen Push"
+    }
+  ]
+}

@@ -8,7 +8,7 @@ Diese Liste ist der Mindeststandard, bevor ein Test-Release an externe Tester ge
 - Release-Workflow ist grün für den Tag (`.github/workflows/release.yml`).
 - Staging-API antwortet auf `GET /health` und `GET /ready` stabil.
 - Migrationen laufen fehlerfrei durch.
-- Proxmox-Staging wurde nach Anleitung geprüft (`fokuno_proxmox/deploy/proxmox/README.md`).
+- Proxmox-Staging wurde nach Anleitung geprüft (`ahds_server_proxmox/deploy/proxmox/README.md`).
 
 ## 2) Versions- und Kompatibilitätsprüfung
 

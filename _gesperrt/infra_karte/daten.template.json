@@ -1,0 +1,240 @@
+{
+  "meta": {
+    "titel": "AhDs Infrastrukturkarte (lokal, nicht öffentlich)",
+    "zweck_kurz": "Topologie, Datenflüsse und Betriebsstatus – für Menschen und Cursor-Agenten.",
+    "legende_status": {
+      "ok": "Getestet und wie beschrieben nutzbar",
+      "ungetestet": "Noch nicht verifiziert",
+      "stoerung": "Bekannt defekt oder blockiert",
+      "geplant": "Soll hinzukommen"
+    },
+    "stand_datum": "2026-04-30",
+    "letzte_aenderung_kurz": "WireGuard-Abschnitt (geplant) für Admin-Absicherung; Template an daten.json anlehnen."
+  },
+  "zugangsdaten": {
+    "speicher_datei": "geheimnisse.json",
+    "vorlage_datei": "geheimnisse.template.json",
+    "hilfe_skript": "geheimnisse_eintragen.py",
+    "hinweis_karte": "Token nur in der Speicherdatei halten — nicht in daten.json und nicht ins Git. infra_karte.html zeigt nur Bezeichnung und „Token hinterlegt“, nie den Klartext.",
+    "wo_verwendet_github_pat_kurz": "Ein GitHub Personal Access Token auf der Workstation reicht meist für HTTPS-git und gh CLI (Credential Manager speichert ihn). Auf dem Proxmox sind oft separate SSH Deploy Keys für git clone — nicht dasselbe wie ein PAT."
+  },
+  "datenfluss_git": {
+    "beschreibung": "Workstation: Bearbeiten im Monorepo → git push (über Fritzbox/Internet) → GitHub. Proxmox: Nur das öffentliche Bootstrap-Skript per curl von GitHub; das Skript klont dann das private Repo nach /opt/ahds.",
+    "schritte": [
+      "Proxmox: SSH-Deploy Key (read-only) fuer das eingegebene private Zielrepo bei GitHub hinterlegen und mit `git ls-remote` testen",
+      "Proxmox: SSH-Deploy Key Setup Schritt-fuer-Schritt: `ssh_setup.html`",
+      "Lokal entwickeln (Cursor), commit/push ins private Repo",
+      "Öffentliches Repo ahds_server_proxmox_bootstrap enthält nur install-ahds-ct.sh (+ optional minimale Metadateien wie .gitignore)",
+      "Proxmox als root: One-Liner lädt Skript von raw.githubusercontent.com",
+      "Skript fragt GitHub-Owner und privaten Repo-Namen ab, macht dann git clone/pull privat und startet ahds_server_proxmox/install_proxmox_ct_nodocker.sh"
+    ],
+    "status": "ungetestet"
+  },
+  "github": {
+    "nutzer_oder_org": "tnt-nitro",
+    "hinweis_minimal_oeffentlich": "Bootstrap bleibt oeffentlich minimal; ahds_server_proxmox ist eigenes Repo fuer Server-/Deploy-Dateien. Details und Betriebswissen stehen in dieser Infra-Karte.",
+    "repos": [
+      {
+        "name": "ahds_server_proxmox_bootstrap",
+        "sichtbarkeit": "public",
+        "zweck": "Nur curl-faehiges install-ahds-ct.sh (+ minimale Metadateien)",
+        "repo_web_url": "https://github.com/tnt-nitro/ahds_server_proxmox_bootstrap",
+        "raw_install_script_url": "https://raw.githubusercontent.com/tnt-nitro/ahds_server_proxmox_bootstrap/main/install-ahds-ct.sh"
+      },
+      {
+        "name": "ahds_server_proxmox",
+        "sichtbarkeit": "public",
+        "zweck": "Eigenes Server-Repo mit deploy/, Installern und staging_api",
+        "repo_web_url": "https://github.com/tnt-nitro/ahds_server_proxmox",
+        "raw_install_script_url": ""
+      },
+      {
+        "name": "fokuno",
+        "sichtbarkeit": "private",
+        "zweck": "Privates Arbeits-/Quellrepo fuer weitere Bereiche",
+        "repo_web_url": "",
+        "raw_install_script_url": ""
+      }
+    ]
+  },
+  "bootstrap_oeffentlich": {
+    "hinweis_readme_github": "Die README auf github.com soll ohne Anleitung bleiben oder entfernt sein — alle URLs, One-Liner und Erklärungen stehen in dieser Infra-Karte.",
+    "lokaler_ordner_im_monorepo": "script/ahds_proxmox_bootstrap",
+    "repo_name_remote": "ahds_server_proxmox_bootstrap",
+    "one_liner_auf_proxmox_als_root": "bash -c \"$(curl -fsSL https://raw.githubusercontent.com/tnt-nitro/ahds_server_proxmox_bootstrap/main/install-ahds-ct.sh)\""
+  },
+  "bootstrap_privat": {
+    "clone_ziel_pfad": "/opt/ahds",
+    "privat_repo_ssh": "git@github.com:tnt-nitro/ahds_server_proxmox.git (später anderer Owner mgl.)",
+    "runtime_prompt_git_owner_default": "tnt-nitro",
+    "runtime_prompt_private_repo_default": "ahds_server_proxmox",
+    "runtime_prompt_account_switch_hinweis": "Später wird der Bootstrap auf ein anderes GitHub Konto gezogen; dann Owner/Repo im Prompt entsprechend anpassen.",
+    "installer_script_relativ": "wird im Bootstrap über Candidate-Pfade gesucht",
+    "deploy_key_hinweis": "Der Proxmox-Host braucht SSH-Zugriff auf das private Repo (z. B. Deploy Key read-only). Ohne das schlägt Schritt [1/3] im Bootstrap-Skript fehl.",
+    "status_ssh_vom_proxmox": "ungetestet"
+  },
+  "server_repo_status": {
+    "lokaler_ordner_im_monorepo": "script/ahds_server_proxmox",
+    "repo_name_remote": "ahds_server_proxmox",
+    "stand_git": "als eigenes Repo initialisiert und auf origin/main gepusht",
+    "hygiene": "Python-Cachedateien entfernt; deploy/staging_api/.gitignore mit __pycache__/ und *.pyc vorhanden"
+  },
+  "bootstrap_agenten": {
+    "rolle": [
+      "Öffentlich: nur install-ahds-ct.sh (+ ggf. minimale Metadateien)",
+      "Skript klont privat nach /opt/ahds und startet den Installer unter ahds_server_proxmox/",
+      "Nach Umbenennung von Ordnern im Monorepo: INSTALLER_REL in install-ahds-ct.sh anpassen",
+      "Privates Ziel-Repo wird zur Laufzeit abgefragt; keine feste private Clone-URL im öffentlichen Script",
+      "Admin-Weblogin nur ueber Alias-Pfad (Standard: /k9Qm4pZ7tL2v); /admin ist deaktiviert",
+      "Zusaetzliche Panel-Admins Stufe B nur in DB (panel_admin_b); Verwaltung nur Stufe A; siehe staging_api README",
+      "Proxmox-Host: ahds-server-git-update.timer vergleicht /opt/ahds mit GitHub und deployt bei neuen Commits ins CT (native_update_ct.sh)"
+    ],
+    "dateien_anpassen": [
+      {"datei": "install-ahds-ct.sh", "feld": "GITHUB_OWNER_DEFAULT, PRIVATE_REPO_DEFAULT, INSTALLER_REL, TARGET_DIR"},
+      {"datei": "README.md / AGENTS.md", "feld": "Öffentlich minimal halten; Details nur hier in daten.json"},
+      {"datei": "push_hilfe_inhalt.txt", "feld": "Liegt im Ordner infra_karte; wird nach push_hilfe.html gerendert"}
+    ],
+    "nie": ["Passwörter", "Deploy-Keys im Klartext", "interne IPs als feste Secrets in öffentlichen Repos"],
+    "push_hilfe_html_seite": "push_hilfe.html",
+    "push_hilfe_inhalt_datei": "push_hilfe_inhalt.txt",
+    "push_hilfe_seiten_titel": "Git push — Bootstrap öffentlich aktualisieren",
+    "hinweis_agent_kann_nicht_automatisch_pushen": "Git push braucht Anmeldedaten auf dieser Maschine (oder gh auth). Hilfe: verlinkte Seite push_hilfe.html."
+  },
+  "workstation": {
+    "name": "Development Workstation (z. B. Cursor)",
+    "projektordner_ein_blatt": [
+      "ahds_android",
+      "ahds_apple",
+      "fokuno_programm",
+      "ahds_server_proxmox",
+      "ahds-proxmox-bootstrap",
+      "ahds_web"
+    ]
+  },
+  "wege_zum_server": {
+    "_erklaerung": "Zwei getrennte Wege sind normal: (A) direkt LAN, (B) über Internet zurück ins LAN (Hairpin/NAT/DNS). Status getrennt pflegen.",
+    "pfad_a_lan_direkt": {
+      "kurzlabel": "A – LAN direkt",
+      "beschreibung": "Browser/SSH vom gleichen Subnetz wie Proxmox/NPM",
+      "beispiel_urls": ["http://192.168.x.x", "https://192.168.x.x"],
+      "status": "ungetestet",
+      "typische_nutzung": "Admin, schnelle Tests ohne DNS-WAN"
+    },
+    "pfad_b_ueber_internet": {
+      "kurzlabel": "B – Raus und wieder rein (Internet)",
+      "beschreibung": "Mobilfunk oder externer PC → DynDNS → Fritzbox Portweiterleitung → NPM → Dienst",
+      "beispiel_urls": ["https://….ddnss.org"],
+      "status": "ungetestet",
+      "typische_nutzung": "Zugriff wie externer Nutzer; Hairpin-Probleme beachten"
+    }
+  },
+  "fritzbox": {
+    "modell": "7490",
+    "dyn_dns_name": "",
+    "geraet_ip_proxmox_oder_npm": "",
+    "portfreigaben": [
+      {
+        "dienst": "HTTP/HTTPS zu NPM",
+        "extern": "80, 443",
+        "intern_host": "",
+        "status": "ungetestet",
+        "notiz_fuer_agenten": "Bei Problemen: Port, Ziel-IP, doppelte Regeln prüfen"
+      }
+    ],
+    "festgelegte_fakten_fuer_support": ""
+  },
+  "nginx_proxy_manager": {
+    "wichtig": "Laut deiner Infra läuft NPM NICHT im LXC/Docker-CT, sondern nativ auf einem Host – das bei jedem Troubleshooting erwähnen.",
+    "installation": "native_auf_host",
+    "listen_port_beispiel": "81 für Admin-UI oft",
+    "npm_setup_html_seite": "npm_setup.html",
+    "npm_setup_inhalt_datei": "npm_setup_inhalt.txt",
+    "telegram_setup_html_seite": "telegram_setup.html",
+    "telegram_setup_inhalt_datei": "telegram_setup_inhalt.txt",
+    "proxy_hosts_kurz": [
+      {
+        "domain": "domain-fokuno.ahds-server.ddnss.org",
+        "forward_nach_ip": "192.168.x.x",
+        "forward_port": "81",
+        "ssl": "vorhanden",
+        "status": "ungetestet"
+      }
+    ]
+  },
+  "staging_api_web": {
+    "beschreibung": "AhDs Staging API (CT): Web-Admin nur über HTTPS und Alias-Pfad — nicht /admin. Stufe A aus API-.env; optionale Stufe-B-Konten nur für Panel, angelegt durch A.",
+    "standard_alias_pfad": "/k9Qm4pZ7tL2v",
+    "oeffentliche_basis_url": "https://ahdsserver.duckdns.org",
+    "admin_login_url_vollstaendig": "https://ahdsserver.duckdns.org/k9Qm4pZ7tL2v/",
+    "hinweis_umgebungsvariablen": "AHDS_ADMIN_ALIAS_PATH ersetzt den Pfad; AHDS_ADMIN_HOST = nur dieser Host-Header; AHDS_ADMIN_PANEL_USER / AHDS_ADMIN_PANEL_PASSWORD in /opt/ahds-native/.env (API).",
+    "status": "ok"
+  },
+  "server_git_auto_update": {
+    "beschreibung": "Läuft auf dem Proxmox-Host (nicht im CT): Klon /opt/ahds mit origin/main vergleichen; bei neuen Commits pull, staging_api per pct ins CT kopieren, pip, ahds-staging-api neu starten. Ohne neue Commits nur update_status.json im CT.",
+    "systemd_timer": "ahds-server-git-update.timer",
+    "systemd_service": "ahds-server-git-update.service",
+    "skript": "/opt/ahds/deploy/proxmox/native_update_ct.sh",
+    "ablauf": "git fetch → wenn HEAD = origin/main: nur Status; sonst pull --ff-only → Tar → CT → venv pip → systemctl restart ahds-staging-api → GET /health",
+    "konfig_datei_optional": "/etc/default/ahds-server-git-update (CTID, REPO_DIR, BRANCH, …)",
+    "intervall": "Timer-Vorlage: alle 15 min (OnUnitActiveSec); systemctl edit ahds-server-git-update.timer",
+    "execstart_hinweis": "Service nutzt ExecStart=/bin/bash …/native_update_ct.sh (kein +x nötig)",
+    "status": "ok"
+  },
+  "wireguard": {
+    "anleitung_html_seite": "wireguard_setup.html",
+    "anleitung_inhalt_datei": "wireguard_setup_inhalt.txt",
+    "anleitung_seiten_titel": "WireGuard: VPN ins Heimnetz und Admin vorbereiten",
+    "beschreibung": "WireGuard als VPN; ausführliche Schritte in wireguard_setup.html (Quelle wireguard_setup_inhalt.txt). Admin-Pfad später per NPM absichern — in diesem JSON kurz festhalten.",
+    "ziel": "Admin- und Schutzpfade nur aus dem WireGuard-Interface oder erlaubter IP-Range.",
+    "erfahrung": "Mit WireGuard bereits gearbeitet — konkrete Werte hier eintragen.",
+    "wo_einrichten": "Proxmox-Host, LXC oder VM — festlegen und dokumentieren.",
+    "nginx_npm_hinweis": "Nginx/NPM: Admin-Pfad nur aus WG-Subnetz; sonst 404. Keine Keys in daten.json.",
+    "naechster_schritt": "Anleitung abarbeiten und Status setzen.",
+    "status": "geplant"
+  },
+  "proxmox": {
+    "hosts": [
+      {
+        "name": "Homeserver",
+        "zwecke": "CT/VM, Staging API, …"
+      }
+    ],
+    "container_und_vm": [
+      {
+        "name": "",
+        "ctid": "",
+        "bridge": "",
+        "ipv4": "",
+        "cidr": "",
+        "gateway_v4": "",
+        "ipv6": "",
+        "gateway_v6": "",
+        "dienste": "",
+        "admin_zugang": "",
+        "user_zugang": "",
+        "status": "ungetestet",
+        "notizen": ""
+      }
+    ]
+  },
+  "karten_bereiche": {
+    "_erklaerung": "Orientierung für das UI: Welche Information gehört wohin (verhindert Durcheinander).",
+    "topologie": "WER hängt an WEM (Fritzbox, NPM, Server, GitHub)",
+    "datenfluss": "WANN fließen Commits/Deploys (Push/Pull)",
+    "betrieb": "WAS läuft wo (CT, NPM nativ, Ports)",
+    "sicherheit_und_zugriff": "Admin vs. Endnutzer, Web-Admin nur Alias-URL (Link in staging_api_web); zusätzlich WireGuard-Zielbild (Abschnitt wireguard); Stufe B ohne Admin-Verwaltung; Git-Update nur Host-Timer"
+  },
+  "checkliste_fuer_agenten": [
+    "Öffentliches Bootstrap-README nicht mit Anleitung füllen — Infra-Karte ist die Quelle",
+    "Status nur setzen nach reproduzierbarem Test",
+    "Zwei Wege zum Server getrennt dokumentieren (LAN vs WAN)",
+    "NPM: nativ vs. Container explizit",
+    "Keine Secrets in diesem JSON — Verweis auf Passwortmanager",
+    "Nach render: infra_karte.html und push_hilfe.html öffnen; Hilfetext in push_hilfe_inhalt.txt pflegen; WireGuard: wireguard_setup_inhalt.txt",
+    "Admin-Web: vollständige URL in staging_api_web.admin_login_url_vollstaendig pflegen (ein Klick in der Karte)",
+    "Git-Auto-Update: Abschnitt server_git_auto_update mit Timer/ExecStart bei Änderungen auf dem Host anpassen",
+    "WireGuard: Abschnitt wireguard bei Umsetzung mit echten IPs/Schnittstellen füllen — Keys nur in geheimnisse / auf den Geräten",
+    "GitHub-PAT nur in geheimnisse.json — nie in daten.json oder ins Repo committen",
+    "Proxmox: SSH-Deploy Key Setup Schritt-fuer-Schritt: `ssh_setup.html` (read-only) – bevor der One-Liner gestartet wird"
+  ]
+}

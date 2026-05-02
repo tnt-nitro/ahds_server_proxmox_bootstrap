@@ -1,0 +1,55 @@
+Bootstrap-Repo nach GitHub bringen (fuer Menschen / Agent mit Berechtigung)
+=========================================================================
+
+Ein Cursor-Agent kann hier **nicht automatisch pushen**, wenn auf dieser
+Maschine noch keine Git-Anmeldung fuer GitHub eingerichtet ist.
+
+Anmeldung einrichten (eine Variante reicht):
+
+**HTTPS + Personal Access Token (haeufig unter Windows)**
+- Auf github.com: Profil -> Settings -> Developer settings -> Personal access tokens
+  (Classic oder Fine-grained), neues Token mit mindestens Scope **repo** fuer private Repos.
+- Remote-URL kann https://github.com/... sein; beim ersten **git push** fragt Git
+  nach Benutzername und Passwort: als Passwort den **Token** eintragen (nicht das
+  GitHub-Web-Passwort).
+- **Git Credential Manager** (kommt oft mit Git fuer Windows): speichert das Token
+  verschluesselt, danach sind keine weiteren Token-Eingaben noetig bis das Token
+  ablaeuft oder geloescht wird.
+
+**SSH statt HTTPS**
+- SSH-Key erzeugen, oeffentlichen Teil bei GitHub unter SSH keys eintragen,
+  Remote auf git@github.com:... umstellen (`git remote set-url ...`).
+
+**GitHub CLI**
+- `gh auth login` — fuehrt durch Browser oder Token.
+
+Vorgehen:
+1. Ordnerwechsel (PowerShell): 
+   cd "Pfad-zum-Monorepo\script\ahds_proxmox_bootstrap"
+   (Inhalt entspricht dem Repo ahds_server_proxmox_bootstrap.)
+
+2. Status pruefen:
+   git status
+   git remote -v
+
+3. Falls dieses Verzeichnis noch kein eigenes Git ist: eigenes Repo anlegen
+   oder nur die Dateien in das geklonte GitHub-Workingcopy kopieren.
+
+4. Commit & Push (wenn Remote stimmt):
+   git add install-ahds-ct.sh .gitignore
+   git commit -m "Update bootstrap script and keep local helper files ignored"
+   git push origin main
+
+Optional: GitHub CLI `gh auth login` dann `gh repo sync`.
+
+Nach Push: Raw-URL im Browser testen (siehe Infra-Karte, Feld raw_install_script_url).
+
+Hinweis zum aktuellen Script:
+- install-ahds-ct.sh fragt zur Laufzeit nach GitHub-Owner und privatem Repo-Namen.
+- Die private Clone-URL ist dadurch nicht mehr fest im oeffentlichen Script hinterlegt.
+
+Aktueller Stand zur Repo-Struktur:
+- ahds_proxmox_bootstrap ist als eigenes Repo fertig.
+- ahds_server_proxmox ist ebenfalls als eigenes Repo auf GitHub eingerichtet:
+  https://github.com/tnt-nitro/ahds_server_proxmox
+- Im Server-Repo wurden Python-Cachedateien entfernt und via .gitignore ausgeschlossen.

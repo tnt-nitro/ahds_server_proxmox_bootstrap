@@ -1,0 +1,25 @@
+Infra-Karte (_gesperrt/infra_karte)
+==================================
+
+Zweck
+-----
+Eine lokale HTML-Übersicht (Topologie, FritzBox, NPM, Bootstrap, zwei Wege
+zum Server), die du und Cursor-Agenten Stück für Stück mit echten Daten
+befüllt. Nicht für GitHub gedacht – bleibt im privaten Bereich.
+
+Schritte
+--------
+1. daten.template.json nach daten.json kopieren (daten.json ist in .gitignore),
+   oder vorhandene daten.json nach Schema aus daten.template.json ergänzen.
+2. daten.json bearbeiten: Statusfelder, URLs, CT, …
+   Optional Zugänge: geheimnisse.template.json nach geheimnisse.json kopieren,
+   oder python geheimnisse_eintragen.py (Token wird nicht angezeigt beim Tippen).
+3. Rendern:
+   - Doppelklick auf render_infra_karte.bat
+   - oder im Ordner infra_karte:  python render_infra_karte.py
+4. infra_karte.html und push_hilfe.html im Browser öffnen (gleicher Ordner).
+
+Hinweis Mermaid
+---------------
+Die Diagramm-Vorschau lädt Mermaid von jsDelivr (Internet). Nur Datei öffnen
+reicht; für komplett offline später eigenes Mermaid einbinden oder SVG exportieren.

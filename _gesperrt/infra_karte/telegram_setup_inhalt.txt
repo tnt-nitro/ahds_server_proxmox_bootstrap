@@ -1,0 +1,134 @@
+Telegram auf dem Handy fuer Healthcheck-Fehlermeldungen einrichten
+==================================================================
+
+Ziel
+----
+Wenn der Healthcheck auf dem Proxmox-Host einen Fehler erkennt
+(zum Beispiel API nicht erreichbar, Routing kaputt oder TLS-Problem),
+soll direkt eine Nachricht auf dem Handy ankommen.
+
+Begriffe kurz erklaert
+----------------------
+- Telegram:
+  Messenger-App fuer Handy und Desktop.
+- Bot:
+  Ein technischer Telegram-Account, der automatisch Nachrichten senden kann.
+- Bot Token:
+  Geheimer Zugangsschluessel fuer den Bot. Niemals oeffentlich teilen.
+- Chat ID:
+  Eindeutige Kennung des Chats, in den der Bot schreiben soll.
+  (Kann dein privater Chat mit dem Bot sein.)
+
+Links und URLs ohne Tippfehler (empfohlen)
+------------------------------------------
+Die Telegram-Web-Adresse (URL) enthaelt deinen Bot-Token direkt im Pfad.
+Wenn du Token oder Chat-ID von Hand einsetzt, passieren leicht Tippfehler.
+
+Zwei Wege (beides nur lokal auf deinem Rechner):
+
+1) Programm geheimnisse_eintragen.py
+   - Bereich "Telegram Healthcheck (API-Links)": Bot-Token und Chat-ID eintragen.
+   - Buttons: fertige getMe-URL, curl-Zeile fuer getUpdates, Test-URL sendMessage,
+     sowie die zwei Zeilen fuer /etc/default/ahds-healthcheck — alles per Klick kopieren.
+
+2) Seite telegram_url_hilfe.html
+   - Im gleichen Ordner wie die Infra-Karte: Datei im Browser oeffnen (Doppelklick).
+   - Token und Chat-ID eintragen; die Seite baut die URLs im Browser
+     (es wird nichts hochgeladen). Kopieren per Button.
+
+Schritt 1: Telegram installieren / oeffnen
+------------------------------------------
+- Handy: Telegram App installieren und anmelden.
+- Optional im Browser/Desktop:
+  https://telegram.org/
+  https://web.telegram.org/
+
+Schritt 2: Bot erstellen (BotFather)
+------------------------------------
+1) In Telegram nach "BotFather" suchen oder direkt:
+   https://t.me/BotFather
+2) Start klicken.
+3) Befehl eingeben:
+   /newbot
+4) Namen und Benutzernamen fuer den Bot vergeben.
+5) Am Ende bekommst du den Bot Token (sieht aus wie
+   123456789:AA....).
+
+Wichtig:
+- Token sofort sicher speichern (z. B. in geheimnisse.json).
+- Token nicht in Screenshots und nicht in Git committen.
+
+Schritt 3: Einmal den Bot-Chat oeffnen
+--------------------------------------
+- In Telegram deinen neuen Bot suchen.
+- "Start" klicken.
+
+Warum:
+- Erst danach kann der Bot dir im direkten Chat schreiben.
+
+Schritt 4: Bot Token testen
+---------------------------
+Am einfachsten: fertige getMe-URL aus geheimnisse_eintragen.py oder
+telegram_url_hilfe.html kopieren und im Browser oeffnen.
+
+Manuell (nur wenn du die URL wirklich selbst bauen willst):
+  https://api.telegram.org/bot<DEIN_BOT_TOKEN>/getMe
+
+Erwartung:
+- JSON mit "ok": true und Bot-Informationen.
+
+Schritt 5: Chat ID ermitteln
+----------------------------
+Am einfachsten: fertige curl-Zeile aus geheimnisse_eintragen.py oder
+telegram_url_hilfe.html kopieren und in der Proxmox-Shell einfuegen.
+
+Manuell:
+  curl -s "https://api.telegram.org/bot<DEIN_BOT_TOKEN>/getUpdates"
+
+Erwartung:
+- In der JSON-Antwort findest du unter "chat" -> "id" deine Chat ID.
+- Diese Zahl als HEALTHCHECK_TELEGRAM_CHAT_ID verwenden.
+
+Schritt 6: Testnachricht senden
+-------------------------------
+Am einfachsten: fertige sendMessage-URL aus geheimnisse_eintragen.py oder
+telegram_url_hilfe.html kopieren (Browser oder curl).
+
+Manuell:
+  https://api.telegram.org/bot<DEIN_BOT_TOKEN>/sendMessage?chat_id=<DEINE_CHAT_ID>&text=Test
+
+Erwartung:
+- Auf dem Handy kommt eine Testnachricht an.
+
+Schritt 7: Werte auf dem Proxmox-Host eintragen
+-----------------------------------------------
+Datei bearbeiten:
+
+/etc/default/ahds-healthcheck
+
+Diese zwei Zeilen setzen:
+- HEALTHCHECK_TELEGRAM_BOT_TOKEN=<DEIN_BOT_TOKEN>
+- HEALTHCHECK_TELEGRAM_CHAT_ID=<DEINE_CHAT_ID>
+
+Dann den Healthcheck einmal testweise starten:
+
+systemctl start ahds-healthcheck.service
+systemctl status ahds-healthcheck.service --no-pager
+
+Hinweis:
+- Der Healthcheck laeuft regelmaessig per systemd timer im Hintergrund.
+- Telegram wird nur bei Fehlern genutzt (nicht bei jedem "ok").
+
+Schneller Fehler-Check
+----------------------
+- Keine Nachricht trotz Fehler?
+  - Token falsch?
+  - Chat ID falsch?
+  - Bot-Chat nicht mit "Start" aktiviert?
+  - Server hat keinen Internetzugriff?
+
+Sicherheit
+----------
+- Bot Token ist ein Geheimnis.
+- Nur lokal speichern (z. B. in geheimnisse.json oder /etc/default/...).
+- Nie in oeffentliche Repositories hochladen.

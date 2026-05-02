@@ -1,0 +1,118 @@
+NPM Setup fuer AhDs (Router -> NPM -> CT101/API)
+=================================================
+
+Begriffe kurz erklaert
+----------------------
+- Certbot:
+  Werkzeug, das automatisch kostenlose Zertifikate fuer die
+  Transportverschluesselung (TLS) von Let's Encrypt holt.
+- "Direkt auf den API-Container verweisen":
+  Bedeutet, dass die Router-Portweiterleitung 80/443 direkt auf den
+  API-Container zeigt (ohne Nginx Proxy Manager dazwischen).
+- Dein Standardaufbau:
+  Router -> Nginx Proxy Manager (NPM) -> API-Container.
+  In diesem Aufbau wird TLS im Nginx Proxy Manager (NPM) verwaltet.
+
+Weiterfuehrende Informationen (Deutsch/Englisch)
+------------------------------------------------
+- Certbot (offizielle Dokumentation, Englisch):
+  https://certbot.eff.org/
+- Let's Encrypt (offizielle Seite, Englisch):
+  https://letsencrypt.org/
+- Certbot (Ueberblick auf Deutsch):
+  https://de.wikipedia.org/wiki/Certbot
+- Let's Encrypt (Ueberblick auf Deutsch):
+  https://de.wikipedia.org/wiki/Let%E2%80%99s_Encrypt
+
+Zielbild
+--------
+- FritzBox Port 80/443 zeigt auf NPM (dein Setup).
+- NPM terminiert TLS und leitet an den internen Dienst weiter.
+- Der API-CT muss intern erreichbar sein (z. B. 192.168.178.113:80).
+
+Aktueller Ist-Stand (aus Troubleshooting)
+-----------------------------------------
+- DynDNS / Public IPv4 passt.
+- Lokal ist API unter http://192.168.178.113 erreichbar.
+- Extern landen Requests aktuell nicht sauber auf dem gewünschten Proxy-Host.
+
+Schritt 1: FritzBox korrekt lassen
+----------------------------------
+- Portfreigaben auf NPM-Gerät belassen (nicht auf API-CT umstellen):
+  - TCP 80 -> NPM
+  - TCP 443 -> NPM
+- Nur eine aktive Regel je Port (keine Doppelweiterleitung).
+
+Schritt 2: Proxy Host in NPM anlegen/prüfen
+--------------------------------------------
+NPM -> Hosts -> Proxy Hosts -> Add Proxy Host
+
+Details:
+- Domain Names: ahdsserver.duckdns.org
+- Scheme: http
+- Forward Hostname / IP: 192.168.178.113
+- Forward Port: 80
+- Cache Assets: aus
+- Block Common Exploits: an
+- Websockets Support: an
+
+Wichtig:
+- Es muss genau der Domain-Host ahdsserver.duckdns.org vorhanden sein.
+- Kein zweiter Host darf dieselbe Domain mit anderer Weiterleitung belegen.
+- Falls vorhanden: "Default Site" soll nicht diese Domain abfangen.
+
+Schritt 3: SSL in NPM (nicht im CT)
+-----------------------------------
+NPM -> (Proxy Host bearbeiten) -> SSL
+
+- SSL Certificate: Request a new SSL Certificate
+- Domain Names: ahdsserver.duckdns.org
+- Force SSL: an
+- HTTP/2 Support: an
+- HSTS: vorerst aus (kann spaeter an)
+- I Agree to the Let's Encrypt Terms of Service: an
+- Save
+
+Hinweis:
+- Let's Encrypt HTTP-01 muss ueber Port 80 von extern bei NPM ankommen.
+- Wenn Cert nicht erstellt wird: zuerst externes HTTP testen (Schritt 5).
+
+Schritt 4: Access Lists / Custom Rules
+--------------------------------------
+- Fuer den Ersttest KEINE Access List aktivieren.
+- KEINE Custom Nginx Regeln, die /.well-known/acme-challenge/ blockieren.
+- Erst wenn Basis stabil ist: Zugriffsschutz schrittweise ergaenzen.
+
+Schritt 5: Tests in Reihenfolge
+-------------------------------
+1) Intern auf API-CT:
+   curl -sS http://192.168.178.113/health
+
+2) Extern im Mobilfunk:
+   http://ahdsserver.duckdns.org/health
+   Erwartung: Antwort von der API (kein Router-/Standard-HTML)
+
+3) Danach HTTPS:
+   https://ahdsserver.duckdns.org/health
+   Erwartung: gueltiges Zertifikat + API-Antwort
+
+Wenn bei 2) schon falsch:
+- NPM-Proxy-Host Domain/Scheme/Forward-IP/Port falsch ODER
+- Portfreigabe zeigt auf falsches Geraet.
+
+Wenn 2) korrekt, 3) falsch:
+- SSL-Zertifikat in NPM fehlt/fehlerhaft.
+
+Troubleshooting-Kurzcheck (NPM-Architektur)
+-------------------------------------------
+- DNS zeigt auf deine öffentliche IPv4.
+- FritzBox 80/443 -> NPM-IP.
+- NPM Proxy Host Domain exakt: ahdsserver.duckdns.org
+- Forward auf 192.168.178.113:80
+- SSL Zertifikat fuer diese Domain in NPM vorhanden.
+- Keine konkurrierenden Proxy-Hosts mit gleicher Domain.
+
+Wichtig fuer das Installer-Script
+---------------------------------
+Wenn NPM als Entry-Point genutzt wird, soll TLS zentral in NPM passieren.
+Der Certbot-Lauf im API-CT ist dann nicht die bevorzugte Endarchitektur.

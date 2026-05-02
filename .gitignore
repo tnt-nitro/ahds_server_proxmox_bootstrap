@@ -210,4 +210,19 @@ __marimo__/
 AhDs Server promox CT Login.txt
 
 # Separates privates Web-Repo (nicht im Hauptrepo verwalten)
-fokuno_web/
+ahds_web/
+
+# Lokale Infra-Karte (nur Template versionieren)
+_gesperrt/infra_karte/geheimnisse.json
+_gesperrt/infra_karte/daten.json
+
+# Eingebettete Repos (eigenes Remote auf GitHub — nicht doppelt im Parent versionieren)
+ahds_server_proxmox/
+
+# Cursor / lokale IDE & Notizen
+.cursor/
+AhDs_ideas/
+.vscode/
+
+# Generierte Hilfe-HTML unter Infra-Karte (lokal rendern; Quellen sind .txt/.py)
+_gesperrt/infra_karte/*.html
