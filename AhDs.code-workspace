@@ -1,0 +1,29 @@
+{
+  "folders": [
+    {
+      "name": "fokuno_programm",
+      "path": "fokuno_programm"
+    },
+    {
+      "name": "ahds_server_proxmox (eigenes Repo)",
+      "path": "ahds_server_proxmox"
+    },
+    {
+      "name": "ahds_web (eigenes Repo)",
+      "path": "ahds_web"
+    },
+    {
+      "name": "ahds_android (eigenes Repo)",
+      "path": "ahds_android"
+    },
+    {
+      "name": "ahds_apple (eigenes Repo)",
+      "path": "ahds_apple"
+    },
+    {
+      "name": "ahds_proxmox_bootstrap (eigenes Repo)",
+      "path": "ahds_proxmox_bootstrap"
+    }
+  ],
+  "settings": {}
+}
